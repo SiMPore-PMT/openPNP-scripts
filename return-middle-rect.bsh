@@ -1,0 +1,81 @@
+// BeanShell Script for OpenPnP ScriptCvStage
+// Name: SelectMiddleRect.bsh
+// Purpose: Takes a list of 3 RotatedRects and returns only the middle one.
+
+import org.opencv.core.RotatedRect;
+import org.openpnp.vision.pipeline.CvStage;
+import java.util.List;
+import java.util.Collections;
+import java.util.Comparator;
+
+// --- CONFIGURATION ---
+// Set this to the name of the stage that finds the three rectangles.
+// This stage must output a List of RotatedRect objects.
+var RECT_FINDING_STAGE_NAME = "7"; // IMPORTANT: Change to your stage name!
+
+print("SelectMiddleRect.bsh: Starting.");
+
+// Get the result from the previous stage
+var prevResult = pipeline.getExpectedResult(RECT_FINDING_STAGE_NAME);
+
+// --- Input Validation ---
+if (prevResult == null || prevResult.model == null) {
+    print("SelectMiddleRect.bsh ERROR: No result or model from stage '" + RECT_FINDING_STAGE_NAME + "'");
+    // Return a result with a null model to signal failure
+    return new CvStage.Result(mat, null);
+}
+
+var modelInput = prevResult.model;
+var image = prevResult.image; // Keep the image to pass it along
+var middleRect = null; // This will hold our final result
+
+// --- Core Logic ---
+if (modelInput instanceof List) {
+    // BSH requires casting for method calls on list elements
+    List rects = (List) modelInput;
+    print("SelectMiddleRect.bsh: Received a list of " + rects.size() + " objects.");
+
+    // We need exactly 3 rectangles for this logic to work reliably
+    if (rects.size() == 3) {
+        // Define a comparator to sort by the Y-coordinate of the rectangle's center
+        yComparator = new Comparator() {
+            public int compare(Object o1, Object o2) {
+                // Cast the objects to RotatedRect to access their properties
+                RotatedRect r1 = (RotatedRect) o1;
+                RotatedRect r2 = (RotatedRect) o2;
+                // Use Double.compare for a safe comparison of floating point numbers
+                return Double.compare(r1.center.y, r2.center.y);
+            }
+        };
+
+        // Sort the list. This will order the rects from top to bottom.
+        Collections.sort(rects, yComparator);
+
+        // The middle rectangle is now at index 1
+        middleRect = rects.get(1);
+        print("SelectMiddleRect.bsh: Successfully identified middle rectangle: " + middleRect.toString());
+
+    } else {
+        print("SelectMiddleRect.bsh ERROR: Expected 3 rectangles, but found " + rects.size() + ".");
+    }
+} else {
+    print("SelectMiddleRect.bsh ERROR: The model from '" + RECT_FINDING_STAGE_NAME + "' was not a List. It was: " + modelInput.getClass().getName());
+}
+
+// --- Return the Result ---
+// Create a new list to hold our single result.
+// This is done because the next stage ("results") expects its input to be a List.
+List resultList = new ArrayList();
+
+// Only add the rectangle to the list if we successfully found it.
+if (middleRect != null) {
+    resultList.add(middleRect);
+    print("SelectMiddleRect.bsh (v2): Returning a List containing 1 RotatedRect.");
+} else {
+    print("SelectMiddleRect.bsh (v2): Returning an empty List because no middle rect was found.");
+}
+
+// Create the final result with the image and the new list (which is either empty or has one item).
+finalResult = new CvStage.Result(image, resultList);
+
+finalResult;

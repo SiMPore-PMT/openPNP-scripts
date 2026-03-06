@@ -1,0 +1,99 @@
+# Pipeline Script stage: "store tip angle"
+#
+# Runs inside the nozzle-tip calibration pipeline.
+# It:
+#   - Reads the first element from the 'results' stage (your rect/keypoint list).
+#   - Extracts angle (kp.angle or kp.size).
+#   - Stores it on the currently loaded nozzle tip as a property.
+#
+# No moves, no DRO changes, no camera magic here.
+
+from org.openpnp.model import Configuration
+from org.pmw.tinylog import Logger
+
+RESULT_STAGE_NAME = "results"                # change if your stage is really named "reults" or something else
+ANGLE_PROPERTY    = "tipSquareAngleDegrees"  # must match NozzleCalibration.Finished script
+
+def log(msg):
+    Logger.info("[TipAnglePipeline] " + msg)
+
+try:
+    res = pipeline.getResult(RESULT_STAGE_NAME)
+    if res is None:
+        log("No result from stage '%s'; skipping." % RESULT_STAGE_NAME)
+        return
+
+    try:
+        try:
+            model = res.getModel()
+        except Exception:
+            model = res.model
+    except Exception as e:
+        log("Cannot access model on '%s': %s" % (RESULT_STAGE_NAME, e))
+        return
+
+    if model is None:
+        log("Model on '%s' is None; skipping." % RESULT_STAGE_NAME)
+        return
+
+    kp = None
+    try:
+        if hasattr(model, "size") and model.size() > 0:
+            kp = model.get(0)
+        elif hasattr(model, "__len__") and len(model) > 0:
+            kp = model[0]
+    except Exception as e:
+        log("Model list not indexable: %s" % e)
+        return
+
+    if kp is None:
+        log("Model list empty; skipping.")
+        return
+
+    angle = None
+    try:
+        if hasattr(kp, "angle"):
+            angle = float(kp.angle)
+        elif hasattr(kp, "size"):
+            angle = float(kp.size)
+    except Exception as e:
+        log("Failed to extract angle from keypoint: %s" % e)
+        return
+
+    if angle is None:
+        log("Keypoint has no angle/size; skipping.")
+        return
+
+    # Get nozzle from pipeline, or fall back to default nozzle
+    noz = None
+    try:
+        noz = pipeline.getProperty("nozzle")
+    except Exception:
+        noz = None
+
+    if noz is None:
+        try:
+            machine = Configuration.get().getMachine()
+            head = machine.getDefaultHead()
+            if head is not None:
+                noz = head.getDefaultNozzle()
+        except Exception:
+            noz = None
+
+    if noz is None:
+        log("No nozzle found; cannot store angle.")
+        return
+
+    tip = noz.getNozzleTip()
+    if tip is None:
+        log("No nozzle tip on nozzle '%s'; cannot store angle." % noz.getName())
+        return
+
+    tip.setProperty(ANGLE_PROPERTY, angle)
+    log("Stored angle %.4f° on tip '%s' as property '%s'."
+        % (angle, tip.getName(), ANGLE_PROPERTY))
+
+except Exception as e:
+    log("ERROR in pipeline script: %s" % e)
+    # swallow; don't break calibration
+    return

@@ -1,0 +1,78 @@
+// BeanShell Script for OpenPnP ScriptCvStage
+// Name: StandardizeRectAngle.bsh
+// Purpose: Takes a list of RotatedRects and standardizes their orientation
+// to be "North-up". This is for square-like objects where width/height
+// cannot be used to determine orientation.
+
+import org.opencv.core.RotatedRect;
+import org.opencv.core.Point;
+import org.opencv.core.Size;
+import org.openpnp.vision.pipeline.CvStage;
+import java.util.List;
+import java.util.ArrayList;
+import java.lang.Math;
+
+// --- CONFIGURATION ---
+// Set this to the name of the stage that provides the rectangle(s).
+// This stage must output a List of RotatedRect objects.
+var INPUT_STAGE_NAME = "orient"; // IMPORTANT: Change to your stage name!
+
+print("StandardizeRectAngle.bsh: Starting.");
+
+// Get the result from the previous stage
+var prevResult = pipeline.getExpectedResult(INPUT_STAGE_NAME);
+
+// --- Input Validation ---
+if (prevResult == null || prevResult.model == null) {
+    print("StandardizeRectAngle.bsh ERROR: No result or model from stage '" + INPUT_STAGE_NAME + "'");
+    return new CvStage.Result(mat, null); // Signal failure
+}
+
+var modelInput = prevResult.model;
+var image = prevResult.image; // Keep the image to pass it along
+List standardizedRects = new ArrayList(); // This will hold our final result(s)
+
+// --- Core Logic ---
+if (modelInput instanceof List) {
+    List inputRects = (List) modelInput;
+    print("StandardizeRectAngle.bsh: Received a list of " + inputRects.size() + " rectangle(s).");
+
+    // Process each rectangle in the list
+    for (Object obj : inputRects) {
+        if (obj instanceof RotatedRect) {
+            RotatedRect rect = (RotatedRect) obj;
+            double currentAngle = rect.angle;
+            double newAngle = currentAngle;
+
+            // If the absolute angle is > 45, it's more horizontal than vertical.
+            // We consider this "sideways" and need to correct it.
+            if (Math.abs(currentAngle) > 45.0) {
+                // Subtract 90 degrees to rotate it to its "North-up" equivalent.
+                // Example: 89.4 degrees becomes -0.6 degrees.
+                // Example: -89.4 degrees becomes -179.4 degrees.
+                newAngle = currentAngle - 90.0;
+                print("  -> Correcting angle: " + currentAngle + " -> " + newAngle);
+            } else {
+                print("  -> Angle " + currentAngle + " is already North-up. No change.");
+            }
+
+            // Create a new RotatedRect with the standardized angle.
+            // It's good practice to create a new object rather than modifying the old one.
+            RotatedRect standardizedRect = new RotatedRect(rect.center, rect.size, newAngle);
+            standardizedRects.add(standardizedRect);
+
+        } else {
+             print("StandardizeRectAngle.bsh WARNING: Item in list was not a RotatedRect.");
+        }
+    }
+
+} else {
+    print("StandardizeRectAngle.bsh ERROR: The model from '" + INPUT_STAGE_NAME + "' was not a List. It was: " + modelInput.getClass().getName());
+}
+
+// --- Return the Result ---
+// The final result is the original image and the new list of standardized rectangles.
+print("StandardizeRectAngle.bsh: Returning a List containing " + standardizedRects.size() + " standardized rectangle(s).");
+finalResult = new CvStage.Result(image, standardizedRects);
+
+finalResult;

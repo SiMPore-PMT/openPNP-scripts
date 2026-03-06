@@ -1,0 +1,147 @@
+// Script for OpenPnP ScriptRun stage (e.g., get_AABB_corner_and_angle.bsh)
+
+import org.opencv.core.Point;
+import org.opencv.core.Rect;
+import org.opencv.core.RotatedRect;
+import org.opencv.core.KeyPoint;
+import org.openpnp.vision.pipeline.CvStage;
+import java.util.List;
+import java.util.ArrayList;
+
+var RECTANGLE_PRODUCING_STAGE_NAME = "8"; // Your stage name
+var requestedPointType = args; // "left" for AABB Top-Left, "right" for AABB Bottom-Right
+var finalScriptResult = null;
+
+var modelInput = null;
+var imageFromRectangleStage = null;
+var targetRectangleObject = null;
+var selectedPoint = null;
+var originalAngle = 0.0;
+
+print("ScriptRun BSH (AABB_Corner): Starting. Args: '" + requestedPointType + "', RectStage: '" + RECTANGLE_PRODUCING_STAGE_NAME + "'");
+
+if (RECTANGLE_PRODUCING_STAGE_NAME == null || RECTANGLE_PRODUCING_STAGE_NAME.trim().equals("") || RECTANGLE_PRODUCING_STAGE_NAME.equals("NameOfYourRectangleStage")) {
+    print("ScriptRun BSH (AABB_Corner) ERROR: RECTANGLE_PRODUCING_STAGE_NAME not configured.");
+} else {
+    var previousResult = pipeline.getExpectedResult(RECTANGLE_PRODUCING_STAGE_NAME);
+    if (previousResult != null) {
+        modelInput = previousResult.model;
+        imageFromRectangleStage = previousResult.image;
+
+        // ---- MODIFIED PRINT SECTION ----
+        String modelInputClassName = "null (modelInput was null)";
+        if (modelInput != null) {
+            try {
+                modelInputClassName = modelInput.getClass().getName();
+            } catch (Throwable t_getClass) { // Catch if getClass itself fails for some reason
+                modelInputClassName = "Error getting class: " + t_getClass.getMessage();
+            }
+        }
+        print("ScriptRun BSH (AABB_Corner): Got model from '" + RECTANGLE_PRODUCING_STAGE_NAME + "': " + modelInputClassName);
+        // ---- END MODIFIED PRINT SECTION ----
+
+    } else {
+        print("ScriptRun BSH (AABB_Corner) ERROR: No result from stage: '" + RECTANGLE_PRODUCING_STAGE_NAME + "' (previousResult was null)");
+    }
+}
+
+// ... (rest of your script remains the same) ...
+
+if (modelInput instanceof List) {
+    print("ScriptRun BSH (AABB_Corner): Model is a List. Size: " + ((List)modelInput).size());
+    if (!((List)modelInput).isEmpty()) {
+        targetRectangleObject = ((List)modelInput).get(0);
+        print("ScriptRun BSH (AABB_Corner): Took first element from List. Type: " + (targetRectangleObject != null ? targetRectangleObject.getClass().getName() : "null"));
+    } else {
+        print("ScriptRun BSH (AABB_Corner): List is empty.");
+    }
+} else if (modelInput != null) {
+    targetRectangleObject = modelInput;
+    print("ScriptRun BSH (AABB_Corner): Model is not a List. Type: " + (targetRectangleObject != null ? targetRectangleObject.getClass().getName() : "null"));
+} else { // Added this else to cover when modelInput is null from the start
+    print("ScriptRun BSH (AABB_Corner): modelInput is null, cannot determine targetRectangleObject.");
+}
+
+
+if (targetRectangleObject != null) {
+    double minX = Double.NaN, minY = Double.NaN, maxX = Double.NaN, maxY = Double.NaN;
+
+    if (targetRectangleObject instanceof RotatedRect) {
+        RotatedRect rRect = (RotatedRect) targetRectangleObject;
+        print("ScriptRun BSH (AABB_Corner): Target object is RotatedRect.");
+        originalAngle = rRect.angle;
+        Point[] vertices = new Point[4];
+        rRect.points(vertices);
+        minX = vertices[0].x; minY = vertices[0].y; maxX = vertices[0].x; maxY = vertices[0].y;
+        for (i = 1; i < 4; i++) {
+            minX = Math.min(minX, vertices[i].x); minY = Math.min(minY, vertices[i].y);
+            maxX = Math.max(maxX, vertices[i].x); maxY = Math.max(maxY, vertices[i].y);
+        }
+    } else if (targetRectangleObject instanceof Rect) {
+        Rect rect = (Rect) targetRectangleObject;
+        print("ScriptRun BSH (AABB_Corner): Target object is Rect.");
+        originalAngle = 0.0;
+        minX = rect.x; minY = rect.y;
+        maxX = rect.x + rect.width; maxY = rect.y + rect.height;
+    } else {
+        print("ScriptRun BSH (AABB_Corner) ERROR: Target object not RotatedRect or Rect. Type: " + (targetRectangleObject != null ? targetRectangleObject.getClass().getName() : "null"));
+    }
+
+    if (!Double.isNaN(minX)) {
+        Point aabbTopLeft = new Point(minX, minY);
+        Point aabbBottomRight = new Point(maxX, maxY);
+        print("ScriptRun BSH (AABB_Corner): Calculated AABB. TopLeft: " + aabbTopLeft + ", BottomRight: " + aabbBottomRight);
+
+        if (requestedPointType.equals("left")) {
+            selectedPoint = aabbTopLeft;
+            print("ScriptRun BSH (AABB_Corner): Selected 'left' -> AABB Top-Left point: " + selectedPoint.toString());
+        } else if (requestedPointType.equals("right")) {
+            selectedPoint = aabbBottomRight;
+            print("ScriptRun BSH (AABB_Corner): Selected 'right' -> AABB Bottom-Right point: " + selectedPoint.toString());
+        } else {
+            print("ScriptRun BSH (AABB_Corner) ERROR: Invalid 'args': '" + requestedPointType + "'");
+        }
+        if (selectedPoint != null) {
+             print("ScriptRun BSH (AABB_Corner): selectedPoint assigned: " + selectedPoint.toString());
+        }
+    } else {
+        print("ScriptRun BSH (AABB_Corner): AABB coordinates (minX, etc.) were not determined.");
+    }
+} else {
+    print("ScriptRun BSH (AABB_Corner) ERROR: targetRectangleObject is null.");
+}
+
+print("ScriptRun BSH (AABB_Corner): Before 'if (selectedPoint != null)' check. selectedPoint is: " + (selectedPoint == null ? "null" : selectedPoint.toString()));
+
+if (selectedPoint != null) {
+    print("ScriptRun BSH (AABB_Corner): INSIDE 'if (selectedPoint != null)' block.");
+    print("ScriptRun BSH (AABB_Corner): selectedPoint value: " + selectedPoint.toString());
+    print("ScriptRun BSH (AABB_Corner): selectedPoint class: " + selectedPoint.getClass().getName());
+
+    try {
+        Point sp = (Point) selectedPoint;
+        print("ScriptRun BSH (AABB_Corner): Successfully cast selectedPoint to Point sp.");
+        print("ScriptRun BSH (AABB_Corner): sp.x = " + sp.x + ", sp.y = " + sp.y);
+
+        KeyPoint keyPointOutput = new KeyPoint(
+            (float) sp.x,
+            (float) sp.y,
+            1.0f,
+            (float) originalAngle,
+            1.0f,
+            0,
+            -1
+        );
+        finalScriptResult = new CvStage.Result(imageFromRectangleStage, keyPointOutput);
+        print("ScriptRun BSH (AABB_Corner): Successfully created KeyPoint: " + keyPointOutput.toString() + " with angle: " + originalAngle);
+    } catch (Throwable t) {
+        print("ScriptRun BSH (AABB_Corner) ERROR during KeyPoint creation or access: " + t.getMessage());
+        t.printStackTrace();
+        finalScriptResult = new CvStage.Result(imageFromRectangleStage, null);
+    }
+} else {
+    print("ScriptRun BSH (AABB_Corner): selectedPoint IS NULL. Cannot create KeyPoint.");
+    finalScriptResult = new CvStage.Result(imageFromRectangleStage, null);
+}
+
+finalScriptResult;
