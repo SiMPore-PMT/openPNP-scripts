@@ -1,0 +1,183 @@
+{
+  "_part_height_z_mm": 2.0, 
+  "_storage_base_z_mm": 3.0, 
+  "abort_on_large_computed_offset": true, 
+  "align_nozzle_to_detected_die_rotation": true, 
+  "allow_machine_writes": false, 
+  "allow_storage_retry_pick_after_place": false, 
+  "allow_vacuum_only_pick_without_part_state": false, 
+  "angles_deg": [
+    0.0, 
+    45.0, 
+    90.0, 
+    135.0, 
+    180.0, 
+    -135.0, 
+    -90.0, 
+    -45.0
+  ], 
+  "apply_offsets_on_homing": false, 
+  "apply_target": "nozzle_head_offsets", 
+  "auto_update_manual_storage_offset_from_confirm": false, 
+  "auto_update_orientation_x_sign": false, 
+  "blowoff_pulse_ms": 120, 
+  "cal_camera_z_mode": "relative_to_cal_work_z", 
+  "cal_camera_z_offset": 0.0, 
+  "cal_work_location_xyz": {
+    "rotation": 0.0, 
+    "x": 306.784, 
+    "y": 359.373, 
+    "z": 3.0
+  }, 
+  "calibration_local_clearance_mm": 0.75, 
+  "calibration_moves": [
+    {
+      "dx_mm": 0.5, 
+      "dy_mm": 0.0
+    }, 
+    {
+      "dx_mm": 0.0, 
+      "dy_mm": 0.5
+    }, 
+    {
+      "dx_mm": -0.5, 
+      "dy_mm": 0.0
+    }, 
+    {
+      "dx_mm": 0.0, 
+      "dy_mm": -0.5
+    }, 
+    {
+      "dx_mm": 0.35, 
+      "dy_mm": 0.35
+    }, 
+    {
+      "dx_mm": -0.35, 
+      "dy_mm": 0.35
+    }, 
+    {
+      "dx_mm": -0.35, 
+      "dy_mm": -0.35
+    }, 
+    {
+      "dx_mm": 0.35, 
+      "dy_mm": -0.35
+    }
+  ], 
+  "calibration_nozzle_motion_strategy": "local_clearance_split", 
+  "calibration_step_mm": 0.5, 
+  "camera_name": "Top", 
+  "circle_detection_min_count": 4, 
+  "circle_result_stage_name": "results", 
+  "confirm_shift_descend_to_surface": false, 
+  "die_storage_location_xyz": {
+    "rotation": 0.0, 
+    "x": 330.0, 
+    "y": 397.4, 
+    "z": 3.0
+  }, 
+  "dry_run_motion_mode": "vision_only", 
+  "enable_blowoff_on_place": true, 
+  "enabled_on_homing": false, 
+  "expected_center_tolerance_mm": 2.0, 
+  "feeder_name_override": null, 
+  "final_pickup_apply_pick_vector": true, 
+  "final_pickup_max_correction_mm": 1.5, 
+  "final_pickup_pick_vector_sign": 1.0, 
+  "final_return_pick_max_centering_error_mm": 0.75, 
+  "final_storage_offset_source": "manual", 
+  "final_storage_return_mode": "calibrated_result", 
+  "fixed_pick_z_mm": null, 
+  "force_blowoff_actuator_name": "Nitrogen", 
+  "force_vacuum_actuator_name": "VAC1", 
+  "lock_xy_to_configured_location": true, 
+  "manual_final_storage_offset_mm": {
+    "x": 0.0, 
+    "y": 0.0
+  }, 
+  "max_apply_mm": 0.5, 
+  "max_pick_descent_mm": 2.0, 
+  "max_retries_per_step": 3, 
+  "max_storage_return_command_offset_mm": 0.5, 
+  "max_verify_correction_mm": 2.0, 
+  "motion_speed": 1.0, 
+  "nozzle_name": "Pick Head", 
+  "orientation_circle_from_results": true, 
+  "orientation_circle_max_square_size_ratio": 0.8, 
+  "orientation_continuous_max_error_deg": 5.0, 
+  "orientation_max_error_deg": 25.0, 
+  "orientation_result_stage_name": "OrientCircleResult", 
+  "orientation_sign_probe_degrees": [
+    12.0, 
+    -12.0
+  ], 
+  "orientation_sign_probe_enabled": true, 
+  "orientation_sign_probe_max_error_deg": 3.0, 
+  "orientation_snap_to_cardinal": true, 
+  "orientation_validation_mode": "auto", 
+  "orientation_x_sign": -1.0, 
+  "overlay_style": {
+    "actual_color": "#24B35F", 
+    "circle_color": "#2A8CFF", 
+    "circle_radius": 14.0, 
+    "circle_width": 2.0, 
+    "cross_size": 10.0, 
+    "expected_color": "#FFB020", 
+    "key_scale": 0.8, 
+    "orientation_color": "#F04C4C", 
+    "square_width": 2.0
+  }, 
+  "part_id_or_name": "Calibration_Square", 
+  "pick_place_xy_mode": "detected_center", 
+  "pick_z_offset": 0.0, 
+  "pick_z_offset_mode": "relative_to_location_z", 
+  "pick_z_source_mode": "location_z_only", 
+  "pivot_probe_angles_deg": [
+    0.0, 
+    45.0, 
+    90.0, 
+    135.0, 
+    180.0, 
+    -135.0, 
+    -90.0, 
+    -45.0
+  ], 
+  "pivot_probe_enabled": true, 
+  "pivot_probe_xy_mm": {
+    "x": 0.0, 
+    "y": 0.0
+  }, 
+  "require_orientation_circle": true, 
+  "require_visual_lock_before_pick": true, 
+  "safe_travel_z": 25.0, 
+  "settle_ms": 250, 
+  "spiral_search": {
+    "angle_step_deg": 45.0, 
+    "enabled": true, 
+    "max_radius_mm": 3.0, 
+    "radius_step_mm": 0.25, 
+    "settle_ms": 250, 
+    "start_radius_mm": 0.25
+  }, 
+  "split_rotation_from_xy_moves": true, 
+  "storage_camera_z_mode": "relative_to_storage_z", 
+  "storage_camera_z_offset": 0.0, 
+  "storage_closed_loop_max_passes": 2, 
+  "storage_closed_loop_return_enabled": false, 
+  "storage_closed_loop_tolerance_deg": 2.0, 
+  "storage_closed_loop_tolerance_mm": 0.15, 
+  "storage_local_clearance_mm": 0.75, 
+  "storage_nozzle_motion_strategy": "machine_safe_split", 
+  "storage_post_place_verify_enabled": false, 
+  "storage_return_use_correction_only_if_verified": true, 
+  "test_iterations": 5, 
+  "use_high_level_nozzle_pick": true, 
+  "use_openpnp_safe_z_for_pick_place": false, 
+  "use_pivot_correction": true, 
+  "vacuum_settle_ms": 150, 
+  "verification_iterations": 4, 
+  "verification_pass_max_offset_mm": 0.2, 
+  "verification_pass_max_theta_deg": 1.0, 
+  "verify_lock_after_centering": true, 
+  "z_clearance_before_pick_mm": 0.0
+}

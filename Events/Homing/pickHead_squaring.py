@@ -11,7 +11,8 @@ from org.openpnp.spi.MotionPlanner import CompletionType
 from java.lang import Thread
 
 
-RESULT_STAGE_NAME = "results"
+RESULT_STAGE_NAME = "squareResults"
+RESULT_STAGE_FALLBACKS = ["results", "orient", "preResults"]
 ROT_AXIS_NAME = "a"
 ANGLE_SIGN = 1.0
 
@@ -76,6 +77,107 @@ def get_tip_pipeline(noz):
     return pl
 
 
+def java_class_name(obj):
+    try:
+        return obj.getClass().getName()
+    except Exception:
+        return str(type(obj))
+
+
+def first_model_item(model):
+    if model is None:
+        return None
+
+    try:
+        cname = java_class_name(model)
+        if "RotatedRect" in cname or "KeyPoint" in cname:
+            return model
+    except Exception:
+        pass
+
+    try:
+        if hasattr(model, "size") and model.size() > 0:
+            return model.get(0)
+    except Exception:
+        pass
+
+    try:
+        if hasattr(model, "__len__") and len(model) > 0:
+            return model[0]
+    except Exception:
+        pass
+
+    return None
+
+
+def read_result_model(pipeline, stage_name):
+    try:
+        res = pipeline.getResult(stage_name)
+    except Exception:
+        return None
+    if res is None:
+        return None
+
+    try:
+        return res.getModel()
+    except Exception:
+        pass
+    try:
+        return res.model
+    except Exception:
+        return None
+
+
+def raw_angle_from_item(item):
+    if item is None:
+        return None
+
+    cname = java_class_name(item)
+    log("Inspecting vision result item type %s: %s" % (cname, item))
+
+    if "RotatedRect" in cname:
+        try:
+            return float(item.angle)
+        except Exception as e:
+            log("RotatedRect had no readable angle: %s" % e)
+            return None
+
+    if "KeyPoint" in cname:
+        try:
+            angle = float(item.angle)
+            if angle == -1.0:
+                log("Ignoring KeyPoint angle -1.0000; OpenCV uses this for unknown orientation.")
+                return None
+            return angle
+        except Exception as e:
+            log("KeyPoint had no readable angle: %s" % e)
+            return None
+
+    try:
+        return float(item.angle)
+    except Exception:
+        pass
+
+    # Last resort for RotatedRect-like toString(), e.g. "{ {x, y} 138x138 * 29.54 }".
+    try:
+        text = str(item)
+        marker = text.rfind("*")
+        if marker >= 0:
+            tail = text[marker + 1:].replace("}", " ").strip()
+            return float(tail.split()[0])
+    except Exception:
+        pass
+
+    return None
+
+
+def square_correction_degrees(raw_angle):
+    correction = ((raw_angle + 45.0) % 90.0) - 45.0
+    if correction == -45.0 and raw_angle > 0.0:
+        correction = 45.0
+    return correction
+
+
 def run_pipeline_and_get_angle(pipeline, noz, cam):
     cv = pipeline
     try:
@@ -89,57 +191,34 @@ def run_pipeline_and_get_angle(pipeline, noz, cam):
 
     cv.process()
 
-    try:
-        res = cv.getResult(RESULT_STAGE_NAME)
-    except Exception:
-        res = None
-    if res is None:
-        log("No result from stage '%s'." % RESULT_STAGE_NAME)
-        return None
+    checked = []
+    for stage_name in [RESULT_STAGE_NAME] + RESULT_STAGE_FALLBACKS:
+        if stage_name in checked:
+            continue
+        checked.append(stage_name)
 
-    try:
-        try:
-            model = res.getModel()
-        except Exception:
-            model = res.model
-    except Exception as e:
-        log("Could not access model on '%s': %s" % (RESULT_STAGE_NAME, e))
-        return None
+        model = read_result_model(cv, stage_name)
+        if model is None:
+            log("No model from stage '%s'." % stage_name)
+            continue
 
-    if model is None:
-        log("Result model is None.")
-        return None
+        item = first_model_item(model)
+        if item is None:
+            log("Model from stage '%s' is empty or not indexable." % stage_name)
+            continue
 
-    kp = None
-    try:
-        if hasattr(model, "size") and model.size() > 0:
-            kp = model.get(0)
-        elif hasattr(model, "__len__") and len(model) > 0:
-            kp = model[0]
-    except Exception as e:
-        log("Result model not indexable: %s" % e)
-        return None
+        raw_angle = raw_angle_from_item(item)
+        if raw_angle is None:
+            log("No usable angle from stage '%s'." % stage_name)
+            continue
 
-    if kp is None:
-        log("Result list empty; no keypoint/rect.")
-        return None
+        correction = square_correction_degrees(raw_angle)
+        log("Measured raw tip angle from stage '%s': %.4f deg; square correction: %.4f deg" %
+            (stage_name, raw_angle, correction))
+        return correction
 
-    angle = None
-    try:
-        if hasattr(kp, "angle"):
-            angle = float(kp.angle)
-        elif hasattr(kp, "size"):
-            angle = float(kp.size)
-    except Exception as e:
-        log("Failed to extract angle from keypoint: %s" % e)
-        return None
-
-    if angle is None:
-        log("Keypoint has no angle/size.")
-        return None
-
-    log("Measured tip angle from pipeline: %.4f deg" % angle)
-    return angle
+    log("No usable angle from any checked stage: %s" % ", ".join(checked))
+    return None
 
 
 def find_rot_axis(machine):
