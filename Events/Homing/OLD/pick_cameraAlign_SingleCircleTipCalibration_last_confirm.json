@@ -1,0 +1,159 @@
+{
+  "active_correction_allowed": true, 
+  "active_fit_source": "openpnp_pairwise_180_offset", 
+  "anchor_frame": "nozzle_target_tool_aware", 
+  "anchor_source": "fresh_detected_nozzle_target", 
+  "apply_forbidden": false, 
+  "bottom_square_changed_rotation_state": false, 
+  "candidate_delta_available": true, 
+  "candidate_source": "openpnp_pairwise_180_offset", 
+  "circle_count": 2, 
+  "command_delta": {
+    "dx": 0.8220060088445393, 
+    "dy": -0.5812163698900861, 
+    "mag": 1.0067305236282142
+  }, 
+  "correction_available": true, 
+  "correction_model": "candidate_head_offset_only", 
+  "correction_reason": "temporary nozzle head offset substitution preview", 
+  "correction_source": "openpnp_pairwise_180_offset", 
+  "correction_used": true, 
+  "correction_x_mm": 0.8220060088445393, 
+  "correction_y_mm": -0.5812163698900861, 
+  "descend_to_surface": true, 
+  "detected_die_orientation_deg": -179.1219725005271, 
+  "detected_measurement_center": {
+    "rotation": 0.0, 
+    "x": 330.35980060993194, 
+    "y": 396.96533600393093, 
+    "z": 5.0
+  }, 
+  "detected_nozzle_target_center": {
+    "rotation": 0.0, 
+    "x": 330.35980060993194, 
+    "y": 396.96533600393093, 
+    "z": 5.0
+  }, 
+  "diagnostic_preview": false, 
+  "diagnostic_preview_allowed": true, 
+  "effective_square_bias_deg": 0.0, 
+  "invalid_square_bias_suppressed": false, 
+  "mode": "candidate_head_offset_only", 
+  "model_mode": "openpnp_model_camera_offset", 
+  "model_offset_at_rotation": null, 
+  "new_model_description": "temporary_static_nozzle_head_offsets", 
+  "no_shift_command": {
+    "rotation": 0.0, 
+    "x": 330.35980060993194, 
+    "y": 396.96533600393093, 
+    "z": 5.0
+  }, 
+  "old_model_description": "current_active_openpnp_offsets", 
+  "overlay": {
+    "actual_center_px": {
+      "radius": 90.0, 
+      "x": 992.5, 
+      "y": 466.5
+    }, 
+    "center_circle_px": {
+      "diameter_px": 180.0, 
+      "radius_px": 90.0, 
+      "size_px": 180.0, 
+      "x_px": 992.5, 
+      "y_px": 466.5
+    }, 
+    "center_source": "large_single_center_circle_only", 
+    "context": "Storage", 
+    "detected_circles_px": [
+      {
+        "radius": 90.0, 
+        "x": 992.5, 
+        "y": 466.5
+      }, 
+      {
+        "radius": 37.0, 
+        "x": 731.5, 
+        "y": 462.5
+      }
+    ], 
+    "die_orientation_deg": -179.1219725005271, 
+    "image_path": "/home/engineering-simpore/.openpnp2/scripts/Events/Homing/pick_cameraAlign_SingleCircleTipCalibration_last_capture.png", 
+    "measured_center_mm": {
+      "rotation": 0.0, 
+      "x": 330.35980060993194, 
+      "y": 396.96533600393093, 
+      "z": 5.0
+    }, 
+    "nozzle_target_mm": {
+      "rotation": 0.0, 
+      "x": 330.35980060993194, 
+      "y": 396.96533600393093, 
+      "z": 5.0
+    }, 
+    "orientation_circle_px": {
+      "radius": 37.0, 
+      "x": 731.5, 
+      "y": 462.5
+    }, 
+    "orientation_circle_used_for_center": false, 
+    "orientation_deg": -179.1219725005271, 
+    "orientation_marker_px": {
+      "diameter_px": 74.0, 
+      "radius_px": 37.0, 
+      "size_px": 74.0, 
+      "x_px": 731.5, 
+      "y_px": 462.5
+    }, 
+    "orientation_marker_used_for_center": false, 
+    "orientation_raw_deg": -179.1219725005271, 
+    "orientation_raw_marker_deg": -179.1219725005271, 
+    "orientation_snapped_deg": 180.0, 
+    "timestamp": 1779409509.674
+  }, 
+  "preview_mode": "candidate_head_offset_only", 
+  "result_loaded": true, 
+  "result_model": "openpnp_pairwise_180_offset", 
+  "rotation_policy": "squared_desired_orientation", 
+  "rotation_source": "squared_desired_storage_orientation_invalid_square_bias_suppressed", 
+  "script_file": "pick_cameraAlign_SingleCircleTipCalibration.py", 
+  "script_model": "single_circle", 
+  "shift_command": {
+    "rotation": 0.0, 
+    "x": 331.1818066187765, 
+    "y": 396.38411963404087, 
+    "z": 5.0
+  }, 
+  "shift_minus_no_shift": {
+    "dx": 0.8220060088445393, 
+    "dy": -0.5812163698900861, 
+    "mag": 1.0067305236282142
+  }, 
+  "show_shift": true, 
+  "show_shift_blocked_or_diagnostic_only": false, 
+  "show_shift_requested": true, 
+  "square_rotation_bias_valid": false, 
+  "target": {
+    "rotation": 0.0, 
+    "x": 331.1818066187765, 
+    "y": 396.38411963404087, 
+    "z": 5.0
+  }, 
+  "target_nozzle_rotation_deg": 0.0, 
+  "target_rotation_deg": 0.0, 
+  "target_surface_z_mm": 5.0, 
+  "target_x_mm": 331.1818066187765, 
+  "target_y_mm": 396.38411963404087, 
+  "target_z_mm": 5.0, 
+  "timestamp": 1779409510.912, 
+  "top_camera_correction_valid_after_bottom_square": true, 
+  "type": "confirm_shift", 
+  "using_candidate_delta_even_if_apply_blocked": false, 
+  "virtual_angle_delta_x_mm": 0.0, 
+  "virtual_angle_delta_y_mm": 0.0, 
+  "virtual_correction_available": true, 
+  "virtual_static_delta_x_mm": 0.8220060088445393, 
+  "virtual_static_delta_y_mm": -0.5812163698900861, 
+  "virtual_total_delta_mag_mm": 1.0067305236282142, 
+  "virtual_total_delta_x_mm": 0.8220060088445393, 
+  "virtual_total_delta_y_mm": -0.5812163698900861
+}

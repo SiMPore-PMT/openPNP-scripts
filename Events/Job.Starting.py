@@ -1,27 +1,26 @@
-# Job.Placement.Starting.py
+#  ----------- ACTIVE SCRIPT --------------
+# Handles correcting the offset rotation and position of ALL the plastic manifold (filter disk body/ mwi body),
+# to be assembled. While doing so it will run through and dispense adhesive(PDMS) if enabled.
+#
+#
+# Note: 
+#   - This may be depricated in the future with the new dispense technique and will be wombo comboed with the Job.Placement.Starting.py scirpt
+# 
+#   - runs once when the job begins (script iterates over boards itself).
+#
+# Job.Starting.py
 #
 # Dispensing script using board-level fiducial(s) to correct boardLocation,
 # then walking the footprint pads of the dispense part and moving a
 # "Dispense Head" around to each pad.
 #
-# - Event: Job.Placement.Starting (or Job.Starting if you bound it there)
+# - Event: Job.Starting (or Job.Starting if you bound it there)
 # - Uses BOARD fiducial placement + its vision pipeline
 # - If fiducial vision fails after N attempts: disables that BoardLocation
 #   and SKIPS dispensing for that board.
 # - Dispense is done by moving a HeadMountable named "Dispense Head"
 #   (rotation of that head is used to "pump" adhesive).
-## Job.Placement.Starting.py
-#
-# Dispensing script using board-level fiducial(s) to correct boardLocation,
-# then walking the footprint pads of the dispense part and moving a
-# "Dispense Head" around to each pad.
-#
-# - Event: Job.Placement.Starting (or Job.Starting if you bound it there)
-# - Uses BOARD fiducial placement + its vision pipeline
-# - If fiducial vision fails after N attempts: disables that BoardLocation
-#   and SKIPS dispensing for that board.
-# - Dispense is done by moving a HeadMountable named "Dispense Head"
-#   (rotation of that head is used to "pump" adhesive).
+
 #
 # *************************
 # *****   CONFIG      *****

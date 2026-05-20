@@ -1,0 +1,61 @@
+{
+  "actual_center_px": {
+    "radius": 92.0, 
+    "x": 961.5, 
+    "y": 667.5
+  }, 
+  "center_circle_px": {
+    "diameter_px": 184.0, 
+    "radius_px": 92.0, 
+    "size_px": 184.0, 
+    "x_px": 961.5, 
+    "y_px": 667.5
+  }, 
+  "center_source": "large_single_center_circle_only", 
+  "context": "Storage", 
+  "detected_circles_px": [
+    {
+      "radius": 92.0, 
+      "x": 961.5, 
+      "y": 667.5
+    }, 
+    {
+      "radius": 36.0, 
+      "x": 1225.5, 
+      "y": 673.5
+    }
+  ], 
+  "die_orientation_deg": 1.3019526725788753, 
+  "image_path": "/home/engineering-simpore/.openpnp2/scripts/Events/Homing/pick_cameraAlign_SingleCircleTipCalibration_last_capture.png", 
+  "measured_center_mm": {
+    "rotation": 0.0, 
+    "x": 330.01660618199685, 
+    "y": 394.74010761635174, 
+    "z": 5.0
+  }, 
+  "nozzle_target_mm": {
+    "rotation": 0.0, 
+    "x": 330.01660618199685, 
+    "y": 394.74010761635174, 
+    "z": 5.0
+  }, 
+  "orientation_circle_px": {
+    "radius": 36.0, 
+    "x": 1225.5, 
+    "y": 673.5
+  }, 
+  "orientation_circle_used_for_center": false, 
+  "orientation_deg": 1.3019526725788753, 
+  "orientation_marker_px": {
+    "diameter_px": 72.0, 
+    "radius_px": 36.0, 
+    "size_px": 72.0, 
+    "x_px": 1225.5, 
+    "y_px": 673.5
+  }, 
+  "orientation_marker_used_for_center": false, 
+  "orientation_raw_deg": 1.3019526725788753, 
+  "orientation_raw_marker_deg": 1.3019526725788753, 
+  "orientation_snapped_deg": 90.0, 
+  "timestamp": 1779411066.944
+}

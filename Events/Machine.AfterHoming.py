@@ -1,7 +1,7 @@
+# #  ----------- ACTIVE SCRIPT --------------
 # Machine.AfterHoming.py
 #
-# Keep this event hook small. The actual tip-squaring workflow lives under
-# Events/Homing so it can be edited and tested independently.
+# This script runs after homing, and is used to square the machine axes using the pick head.
 
 import imp
 import os
