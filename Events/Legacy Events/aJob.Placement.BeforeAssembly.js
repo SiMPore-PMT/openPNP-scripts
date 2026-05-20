@@ -1,4 +1,5 @@
-// /* Job.Placement.BeforeAssembly.js — pre-move alignment using PART fiducial (super-verbose)
+//-------- DEPRICATED --------------
+/* Job.Placement.BeforeAssembly.js — pre-move alignment using PART fiducial (super-verbose)
 //  * Runs BEFORE moving to the placement point.
 //  * - Uses part.getFiducialVisionSettings().getPipeline()
 //  * - Moves TOP cam to placement XY (blocking, safe)

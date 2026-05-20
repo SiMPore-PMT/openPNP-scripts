@@ -1,4 +1,6 @@
-# # Nozzle.BeforePlace.py - pre-place alignment using PART fiducial (Python/Jython)
+# ----------- DEPRICATED --------------
+# This has been moved to job.Placement.Starting.py
+#  # Nozzle.BeforePlace.py - pre-place alignment using PART fiducial (Python/Jython)
 # # Runs right before a nozzle places a part.
 # # - Uses part.getFiducialVisionSettings().getPipeline()
 # # - Assumes nozzle is already at nominal placement XY

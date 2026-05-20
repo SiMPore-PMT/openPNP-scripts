@@ -1,5 +1,9 @@
+// Manviths script for uploading images to the vercel app when a job completes
+// Currently not called
+
 load(
-  scripting.getScriptsDirectory().toString() + "/Examples/JavaScript/Utility.js"
+  scripting.getScriptsDirectory().toString() +
+    "/Examples/JavaScript/Utility.js",
 );
 
 var imports = new JavaImporter(
@@ -16,7 +20,7 @@ var imports = new JavaImporter(
   java.util.Date,
   org.openpnp.util.OpenCvUtils,
   java.io.BufferedReader,
-  java.io.InputStreamReader
+  java.io.InputStreamReader,
 );
 
 var API_URL = "https://lumen-image-storage.vercel.app/api/upload-image";
@@ -35,7 +39,7 @@ function getRunSession(apiUrl) {
       var responseCode = conn.getResponseCode();
       if (responseCode == HttpURLConnection.HTTP_OK) {
         var inReader = new BufferedReader(
-          new InputStreamReader(conn.getInputStream())
+          new InputStreamReader(conn.getInputStream()),
         );
         var response = inReader.readLine(); // Read the JSON response line
         inReader.close();
@@ -48,12 +52,12 @@ function getRunSession(apiUrl) {
           return runNumber;
         } else {
           throw new Exception(
-            "Could not parse runNumber from server response: " + response
+            "Could not parse runNumber from server response: " + response,
           );
         }
       } else {
         throw new Exception(
-          "Server responded with error code: " + responseCode
+          "Server responded with error code: " + responseCode,
         );
       }
     } catch (e) {
@@ -63,7 +67,7 @@ function getRunSession(apiUrl) {
         null,
         "FATAL: Could not start run session with the server.\n" + e,
         "Network Error",
-        javax.swing.JOptionPane.ERROR_MESSAGE
+        javax.swing.JOptionPane.ERROR_MESSAGE,
       );
       return null;
     }
@@ -92,7 +96,7 @@ function uploadImageToServer(image, folder, filename, apiUrl, runNumber) {
       conn.setRequestMethod("POST");
       conn.setRequestProperty(
         "Content-Type",
-        "multipart/form-data; boundary=" + boundary
+        "multipart/form-data; boundary=" + boundary,
       );
       var dos = new DataOutputStream(conn.getOutputStream());
 
@@ -104,7 +108,7 @@ function uploadImageToServer(image, folder, filename, apiUrl, runNumber) {
       //runNumber
       dos.writeBytes("--" + boundary + "\r\n");
       dos.writeBytes(
-        'Content-Disposition: form-data; name="runNumber"\r\n\r\n'
+        'Content-Disposition: form-data; name="runNumber"\r\n\r\n',
       );
       dos.writeBytes(runNumber.toString() + "\r\n");
 
@@ -113,7 +117,7 @@ function uploadImageToServer(image, folder, filename, apiUrl, runNumber) {
       dos.writeBytes(
         'Content-Disposition: form-data; name="file"; filename="' +
           filename +
-          '"\r\n'
+          '"\r\n',
       );
       dos.writeBytes("Content-Type: image/png\r\n\r\n");
       dos.write(imageBytes);
@@ -126,14 +130,14 @@ function uploadImageToServer(image, folder, filename, apiUrl, runNumber) {
       if (responseCode == HttpURLConnection.HTTP_OK) {
         print(
           "Image uploaded successfully! Server responded with code: " +
-            responseCode
+            responseCode,
         );
       } else {
         print(
           "Upload failed. Server responded with code: " +
             responseCode +
             ", " +
-            conn.getResponseMessage()
+            conn.getResponseMessage(),
         );
       }
       conn.disconnect();

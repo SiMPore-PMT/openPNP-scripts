@@ -1,3 +1,5 @@
+#-------- DEPRICATED --------------
+#       OLD JOB EVENT 
 # # Job.Placement.BeforeAssembly.py
 # # This somewhat functioned last time i used it, but was transfered over to Placement.Starting.py as the discovered board position would not update until the next placement, not the current
 

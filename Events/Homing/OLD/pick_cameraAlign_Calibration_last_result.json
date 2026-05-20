@@ -1,0 +1,6503 @@
+{
+  "applied": null, 
+  "apply_available": false, 
+  "apply_block_reason": "selected head delta exceeds max_apply_mm", 
+  "apply_offsets_requested": false, 
+  "calibration_result_mode": "round_object_nozzle_axis", 
+  "camera_name": "Top", 
+  "computed": {
+    "apply_available": false, 
+    "apply_block_reason": "selected head delta exceeds max_apply_mm", 
+    "apply_target": "nozzle_head_offsets", 
+    "bias_x_mm": -0.2276467488514793, 
+    "bias_y_mm": -0.6267099880198301, 
+    "confirm_preview_available": true, 
+    "correction_available": true, 
+    "correction_is_diagnostic": true, 
+    "diagnostic_note": "Residual angle-dependent term is diagnostic only and is not raw runout; apply writes residual static nozzle head offset delta only.", 
+    "diagnostic_preview_available": true, 
+    "existing_openpnp_compensation_assumed_active": true, 
+    "fit": {
+      "bias_mag_mm": 0.66677466309576, 
+      "bias_x_mm": -0.2276467488514793, 
+      "bias_y_mm": -0.6267099880198301, 
+      "model": "residual_compensated_round_axis", 
+      "peak_error_mm": 0.627347384421579, 
+      "residual_angle_phase_deg": 90.63580206717141, 
+      "residual_angle_radius_mm": 0.07760738201281818, 
+      "residual_angle_vector_diagnostic_only": true, 
+      "residual_angle_vector_x_mm": -0.0008611789848546305, 
+      "residual_angle_vector_y_mm": 0.07760260378131355, 
+      "residual_static_bias_mag_mm": 0.66677466309576, 
+      "residual_static_bias_x_mm": -0.2276467488514793, 
+      "residual_static_bias_y_mm": -0.6267099880198301, 
+      "rms_error_mm": 0.1714649075069225, 
+      "runout_phase_deg": 90.63580206717141, 
+      "runout_radius_mm": 0.07760738201281818, 
+      "runout_vector_x_mm": -0.0008611789848546305, 
+      "runout_vector_y_mm": 0.07760260378131355, 
+      "sample_count": 16, 
+      "sample_predictions": [
+        {
+          "command_angle_deg": 0.0, 
+          "measured_error_x_mm": -0.024909272995273568, 
+          "measured_error_y_mm": 0.04428315199163535, 
+          "predicted_error_x_mm": -0.22850792783633395, 
+          "predicted_error_y_mm": -0.5491073842385166, 
+          "residual_mm": 0.627347384421579
+        }, 
+        {
+          "command_angle_deg": 45.0, 
+          "measured_error_x_mm": -0.2767696999476357, 
+          "measured_error_y_mm": -0.7029950378670833, 
+          "predicted_error_x_mm": -0.283129021722985, 
+          "predicted_error_y_mm": -0.5724456061483365, 
+          "residual_mm": 0.13070422753503486
+        }, 
+        {
+          "command_angle_deg": 90.0, 
+          "measured_error_x_mm": -0.28507279094611704, 
+          "measured_error_y_mm": -0.6670149768738725, 
+          "predicted_error_x_mm": -0.30524935263279285, 
+          "predicted_error_y_mm": -0.6275711670046847, 
+          "residual_mm": 0.04430471508195109
+        }, 
+        {
+          "command_angle_deg": 135.0, 
+          "measured_error_x_mm": -0.28507279094611704, 
+          "measured_error_y_mm": -0.7057627348665392, 
+          "predicted_error_x_mm": -0.2819111307229729, 
+          "predicted_error_y_mm": -0.6821922608913358, 
+          "residual_mm": 0.02378157561605943
+        }, 
+        {
+          "command_angle_deg": 179.0, 
+          "measured_error_x_mm": -0.19650648696284634, 
+          "measured_error_y_mm": -0.691924249869146, 
+          "predicted_error_x_mm": -0.22814005321013825, 
+          "predicted_error_y_mm": -0.7043158021943701, 
+          "residual_mm": 0.03397400598325978
+        }, 
+        {
+          "command_angle_deg": -135.0, 
+          "measured_error_x_mm": -0.2214157599581199, 
+          "measured_error_y_mm": -0.6863888558701774, 
+          "predicted_error_x_mm": -0.17216447597997364, 
+          "predicted_error_y_mm": -0.6809743698913236, 
+          "residual_mm": 0.04954801340024856
+        }, 
+        {
+          "command_angle_deg": -90.0, 
+          "measured_error_x_mm": -0.23248654795605717, 
+          "measured_error_y_mm": -0.5978225518869635, 
+          "predicted_error_x_mm": -0.15004414507016578, 
+          "predicted_error_y_mm": -0.6258488090349755, 
+          "residual_mm": 0.08707594893727041
+        }, 
+        {
+          "command_angle_deg": -45.0, 
+          "measured_error_x_mm": -0.19927418396230223, 
+          "measured_error_y_mm": -0.6199641278827812, 
+          "predicted_error_x_mm": -0.17338236697998574, 
+          "predicted_error_y_mm": -0.5712277151483245, 
+          "residual_mm": 0.05518717344518641
+        }, 
+        {
+          "command_angle_deg": 0.0, 
+          "measured_error_x_mm": -0.22695115395708854, 
+          "measured_error_y_mm": -0.6448734008780548, 
+          "predicted_error_x_mm": -0.22850792783633395, 
+          "predicted_error_y_mm": -0.5491073842385166, 
+          "residual_mm": 0.09577866927408946
+        }, 
+        {
+          "command_angle_deg": 45.0, 
+          "measured_error_x_mm": -0.2767696999476357, 
+          "measured_error_y_mm": -0.691924249869146, 
+          "predicted_error_x_mm": -0.283129021722985, 
+          "predicted_error_y_mm": -0.5724456061483365, 
+          "residual_mm": 0.11964776336733825
+        }, 
+        {
+          "command_angle_deg": 90.0, 
+          "measured_error_x_mm": -0.2906081849450288, 
+          "measured_error_y_mm": -0.6974596438681147, 
+          "predicted_error_x_mm": -0.30524935263279285, 
+          "predicted_error_y_mm": -0.6275711670046847, 
+          "residual_mm": 0.07140562295471838
+        }, 
+        {
+          "command_angle_deg": 135.0, 
+          "measured_error_x_mm": -0.29891127594345335, 
+          "measured_error_y_mm": -0.6808534618712656, 
+          "predicted_error_x_mm": -0.2819111307229729, 
+          "predicted_error_y_mm": -0.6821922608913358, 
+          "residual_mm": 0.01705278042823412
+        }, 
+        {
+          "command_angle_deg": 179.0, 
+          "measured_error_x_mm": -0.19373878996339045, 
+          "measured_error_y_mm": -0.6946919468686019, 
+          "predicted_error_x_mm": -0.22814005321013825, 
+          "predicted_error_y_mm": -0.7043158021943701, 
+          "residual_mm": 0.035722059071438717
+        }, 
+        {
+          "command_angle_deg": -135.0, 
+          "measured_error_x_mm": -0.2214157599581199, 
+          "measured_error_y_mm": -0.7251366138628441, 
+          "predicted_error_x_mm": -0.17216447597997364, 
+          "predicted_error_y_mm": -0.6809743698913236, 
+          "residual_mm": 0.06615128695721727
+        }, 
+        {
+          "command_angle_deg": -90.0, 
+          "measured_error_x_mm": -0.22695115395708854, 
+          "measured_error_y_mm": -0.6559441888759352, 
+          "predicted_error_x_mm": -0.15004414507016578, 
+          "predicted_error_y_mm": -0.6258488090349755, 
+          "residual_mm": 0.08258583355336954
+        }, 
+        {
+          "command_angle_deg": -45.0, 
+          "measured_error_x_mm": -0.18820339596442182, 
+          "measured_error_y_mm": -0.608893339884844, 
+          "predicted_error_x_mm": -0.17338236697998574, 
+          "predicted_error_y_mm": -0.5712277151483245, 
+          "residual_mm": 0.040476686956194934
+        }
+      ], 
+      "unique_angle_count": 8
+    }, 
+    "fit_residual_warning": "fit residuals exceed limits; using computed delta as diagnostic/bring-up correction only", 
+    "fit_residuals_exceed_limits": true, 
+    "internal_model": "residual_compensated_round_axis", 
+    "measurement_interpretation": "residual_on_existing_compensation", 
+    "model": "round_object_nozzle_axis", 
+    "model_composition_warning": "If persistent runout/nozzle-tip compensation is ever written, it must be composed with the existing OpenPnP model. Residual fitted values must not replace existing compensation.", 
+    "nozzle_head_offset_delta_mag_mm": 0.66677466309576, 
+    "nozzle_head_offset_delta_x_mm": 0.2276467488514793, 
+    "nozzle_head_offset_delta_y_mm": 0.6267099880198301, 
+    "official_model": "round_object_nozzle_axis", 
+    "ok": true, 
+    "old_nozzle_head_offset_x_mm": -24.400000000000034, 
+    "old_nozzle_head_offset_y_mm": -62.99999999999977, 
+    "peak_error_mm": 0.627347384421579, 
+    "persistent_apply_type": "nozzle_head_offset_delta_only", 
+    "preview_new_nozzle_head_offset_x_mm": -24.172353251148554, 
+    "preview_new_nozzle_head_offset_y_mm": -62.37329001197994, 
+    "residual_angle_phase_deg": 90.63580206717141, 
+    "residual_angle_radius_mm": 0.07760738201281818, 
+    "residual_angle_vector_diagnostic_only": true, 
+    "residual_angle_vector_x_mm": -0.0008611789848546305, 
+    "residual_angle_vector_y_mm": 0.07760260378131355, 
+    "residual_static_bias_mag_mm": 0.66677466309576, 
+    "residual_static_bias_x_mm": -0.2276467488514793, 
+    "residual_static_bias_y_mm": -0.6267099880198301, 
+    "rms_error_mm": 0.1714649075069225, 
+    "round_object_head_delta_sign_override": 1.0, 
+    "runout_phase_deg": 90.63580206717141, 
+    "runout_radius_mm": 0.07760738201281818, 
+    "runout_vector_x_mm": -0.0008611789848546305, 
+    "runout_vector_y_mm": 0.07760260378131355, 
+    "runout_write_allowed": false, 
+    "safe_to_apply": false, 
+    "same_run_preview_correction_type": "residual_delta_only", 
+    "samples": [
+      {
+        "actual_rotation_delta_deg": 0.0, 
+        "center_px": {
+          "x": 957.75, 
+          "y": 495.5
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 958.0, 
+            "y": 495.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 818.5, 
+              "y_px": 366.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1088.5, 
+              "y_px": 357.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1097.5, 
+              "y_px": 624.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 826.5, 
+              "y_px": 633.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            270.14995835646545, 
+            267.15164233071823, 
+            271.14940531006147, 
+            267.1198233003309
+          ], 
+          "corner_side_rms_px": 1.7921907704776943, 
+          "mean_bbox_center_delta_px": 0.25, 
+          "mean_center_px": {
+            "x": 957.75, 
+            "y": 495.5
+          }, 
+          "orientation_corner_ratio": 0.5660377358490566, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 949.5, 
+            "y_px": 229.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 949.5, 
+              "y_px": 229.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 818.5, 
+              "y_px": 366.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1088.5, 
+              "y_px": 357.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1097.5, 
+              "y_px": 624.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 826.5, 
+              "y_px": 633.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 958.0, 
+            "y": 495.5
+          }, 
+          "center_consistency_rms_px": 0.1767766952966369, 
+          "diagonal_intersection_px": {
+            "x": 957.733734439834, 
+            "y": 495.25377593361
+          }, 
+          "mean_center_px": {
+            "x": 957.75, 
+            "y": 495.5
+          }, 
+          "pose_center_px": {
+            "x": 957.75, 
+            "y": 495.5
+          }
+        }, 
+        "command_angle_deg": 0.0, 
+        "commanded_nozzle_rotation_deg": 0.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.05080816303968628, 
+        "error_x_mm": -0.024909272995273568, 
+        "error_y_mm": 0.04428315199163535, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.7590907270047, 
+        "measured_after_place_center_y_mm": 359.4172831519916, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 0.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 0.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.7590907270047, 
+            "y": 359.4172831519916, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 957.75, 
+            "y": 495.5
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.7590907270047, 
+            "y": 359.4172831519916, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 0.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 0.0, 
+        "sample_index": 0, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 935.0, 
+          "y": 563.0
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 929.5, 
+              "y_px": 373.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1125.5, 
+              "y_px": 556.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 940.5, 
+              "y_px": 752.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 744.5, 
+              "y_px": 569.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            268.1510768205118, 
+            269.51994360343724, 
+            268.1510768205118, 
+            269.51994360343724
+          ], 
+          "corner_side_rms_px": 0.6844333914627327, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }, 
+          "orientation_corner_ratio": 0.5786163522012578, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 739.5, 
+            "y_px": 380.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 739.5, 
+              "y_px": 380.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 929.5, 
+              "y_px": 373.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1125.5, 
+              "y_px": 556.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 940.5, 
+              "y_px": 752.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 744.5, 
+              "y_px": 569.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }, 
+          "mean_center_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }, 
+          "pose_center_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }
+        }, 
+        "command_angle_deg": 45.0, 
+        "commanded_nozzle_rotation_deg": 45.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.755515380435664, 
+        "error_x_mm": -0.2767696999476357, 
+        "error_y_mm": -0.7029950378670833, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.50723030005236, 
+        "measured_after_place_center_y_mm": 358.6700049621329, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 45.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 0.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.50723030005236, 
+            "y": 358.6700049621329, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.50723030005236, 
+            "y": 358.6700049621329, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 45.0, 
+        "raw_sample_error_warning": true, 
+        "requested_sample_angle_deg": 45.0, 
+        "sample_index": 1, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 934.25, 
+          "y": 559.75
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.25, 
+          "bbox_center_px": {
+            "x": 934.0, 
+            "y": 559.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 793.5, 
+              "y_px": 431.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1062.5, 
+              "y_px": 419.5
+            }, 
+            {
+              "radius_px": 78.0, 
+              "x_px": 1074.5, 
+              "y_px": 688.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 806.5, 
+              "y_px": 699.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            78.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.82915619758885, 
+          "corner_side_lengths_px": [
+            269.2675249635574, 
+            269.2675249635574, 
+            268.2256512714621, 
+            268.31511325305553
+          ], 
+          "corner_side_rms_px": 0.49957364067480703, 
+          "mean_bbox_center_delta_px": 0.3535533905932738, 
+          "mean_center_px": {
+            "x": 934.25, 
+            "y": 559.75
+          }, 
+          "orientation_corner_ratio": 0.5678233438485805, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 666.5, 
+            "y_px": 571.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 666.5, 
+              "y_px": 571.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 793.5, 
+              "y_px": 431.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1062.5, 
+              "y_px": 419.5
+            }, 
+            {
+              "radius_px": 78.0, 
+              "x_px": 1074.5, 
+              "y_px": 688.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 806.5, 
+              "y_px": 699.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 934.0, 
+            "y": 559.5
+          }, 
+          "center_consistency_rms_px": 0.25, 
+          "diagonal_intersection_px": {
+            "x": 934.0233401627997, 
+            "y": 560.0213466969378
+          }, 
+          "mean_center_px": {
+            "x": 934.25, 
+            "y": 559.75
+          }, 
+          "pose_center_px": {
+            "x": 934.25, 
+            "y": 559.75
+          }
+        }, 
+        "command_angle_deg": 90.0, 
+        "commanded_nozzle_rotation_deg": 90.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.725379538939348, 
+        "error_x_mm": -0.28507279094611704, 
+        "error_y_mm": -0.6670149768738725, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.4989272090539, 
+        "measured_after_place_center_y_mm": 358.7059850231261, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 90.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 45.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.4989272090539, 
+            "y": 358.7059850231261, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 934.25, 
+            "y": 559.75
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.4989272090539, 
+            "y": 358.7059850231261, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 90.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 90.0, 
+        "sample_index": 2, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 934.25, 
+          "y": 563.25
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 934.0, 
+            "y": 563.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 924.5, 
+              "y_px": 373.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1124.5, 
+              "y_px": 554.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 944.5, 
+              "y_px": 752.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 743.5, 
+              "y_px": 572.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            269.74246977441277, 
+            267.5892374517331, 
+            269.81660438156877, 
+            269.0018587296378
+          ], 
+          "corner_side_rms_px": 0.894807342648007, 
+          "mean_bbox_center_delta_px": 0.3535533905932738, 
+          "mean_center_px": {
+            "x": 934.25, 
+            "y": 563.25
+          }, 
+          "orientation_corner_ratio": 0.5786163522012578, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 754.5, 
+            "y_px": 760.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 754.5, 
+              "y_px": 760.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 924.5, 
+              "y_px": 373.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1124.5, 
+              "y_px": 554.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 944.5, 
+              "y_px": 752.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 743.5, 
+              "y_px": 572.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 934.0, 
+            "y": 563.0
+          }, 
+          "center_consistency_rms_px": 0.25, 
+          "diagonal_intersection_px": {
+            "x": 934.5250761610677, 
+            "y": 563.475193252233
+          }, 
+          "mean_center_px": {
+            "x": 934.25, 
+            "y": 563.25
+          }, 
+          "pose_center_px": {
+            "x": 934.25, 
+            "y": 563.25
+          }
+        }, 
+        "command_angle_deg": 135.0, 
+        "commanded_nozzle_rotation_deg": 135.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.7611619630959665, 
+        "error_x_mm": -0.28507279094611704, 
+        "error_y_mm": -0.7057627348665392, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.4989272090539, 
+        "measured_after_place_center_y_mm": 358.66723726513345, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 135.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 90.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.4989272090539, 
+            "y": 358.66723726513345, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 934.25, 
+            "y": 563.25
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.4989272090539, 
+            "y": 358.66723726513345, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 135.0, 
+        "raw_sample_error_warning": true, 
+        "requested_sample_angle_deg": 135.0, 
+        "sample_index": 3, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 44.0, 
+        "center_px": {
+          "x": 942.25, 
+          "y": 562.0
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.75, 
+          "bbox_center_px": {
+            "x": 942.0, 
+            "y": 562.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 802.5, 
+              "y_px": 432.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1073.5, 
+              "y_px": 424.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1081.5, 
+              "y_px": 691.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 811.5, 
+              "y_px": 699.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            80.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.4330127018922193, 
+          "corner_side_lengths_px": [
+            271.1180554666177, 
+            267.1198233003309, 
+            270.1184925176357, 
+            267.15164233071823
+          ], 
+          "corner_side_rms_px": 1.7768062863298817, 
+          "mean_bbox_center_delta_px": 0.25, 
+          "mean_center_px": {
+            "x": 942.25, 
+            "y": 562.0
+          }, 
+          "orientation_corner_ratio": 0.5768025078369906, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 950.5, 
+            "y_px": 828.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 950.5, 
+              "y_px": 828.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 802.5, 
+              "y_px": 432.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1073.5, 
+              "y_px": 424.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1081.5, 
+              "y_px": 691.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 811.5, 
+              "y_px": 699.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 942.0, 
+            "y": 562.0
+          }, 
+          "center_consistency_rms_px": 0.1767766952966369, 
+          "diagonal_intersection_px": {
+            "x": 942.2653320238202, 
+            "y": 562.2463118070589
+          }, 
+          "mean_center_px": {
+            "x": 942.25, 
+            "y": 562.0
+          }, 
+          "pose_center_px": {
+            "x": 942.25, 
+            "y": 562.0
+          }
+        }, 
+        "command_angle_deg": 179.0, 
+        "commanded_nozzle_rotation_deg": 179.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.7192871241552011, 
+        "error_x_mm": -0.19650648696284634, 
+        "error_y_mm": -0.691924249869146, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.58749351303715, 
+        "measured_after_place_center_y_mm": 358.68107575013084, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 179.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 135.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.58749351303715, 
+            "y": 358.68107575013084, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 942.25, 
+            "y": 562.0
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.58749351303715, 
+            "y": 358.68107575013084, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 179.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 179.0, 
+        "sample_index": 4, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 46.0, 
+        "center_px": {
+          "x": 940.0, 
+          "y": 561.5
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 930.5, 
+              "y_px": 371.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1130.5, 
+              "y_px": 551.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 949.5, 
+              "y_px": 751.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 749.5, 
+              "y_px": 571.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            269.0724809414742, 
+            269.74246977441277, 
+            269.0724809414742, 
+            269.74246977441277
+          ], 
+          "corner_side_rms_px": 0.3349944164692715, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }, 
+          "orientation_corner_ratio": 0.5660377358490566, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 1139.5, 
+            "y_px": 739.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 1139.5, 
+              "y_px": 739.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 930.5, 
+              "y_px": 371.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1130.5, 
+              "y_px": 551.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 949.5, 
+              "y_px": 751.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 749.5, 
+              "y_px": 571.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }, 
+          "mean_center_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }, 
+          "pose_center_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }
+        }, 
+        "command_angle_deg": -135.0, 
+        "commanded_nozzle_rotation_deg": 225.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.7212174430923055, 
+        "error_x_mm": -0.2214157599581199, 
+        "error_y_mm": -0.6863888558701774, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.5625842400419, 
+        "measured_after_place_center_y_mm": 358.6866111441298, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": -135.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 179.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.5625842400419, 
+            "y": 358.6866111441298, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.5625842400419, 
+            "y": 358.6866111441298, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": -135.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": -135.0, 
+        "sample_index": 5, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 939.0, 
+          "y": 553.5
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.0, 
+          "bbox_center_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 78.0, 
+              "x_px": 797.5, 
+              "y_px": 425.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1066.5, 
+              "y_px": 412.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1080.5, 
+              "y_px": 681.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 811.5, 
+              "y_px": 694.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            78.0, 
+            79.0, 
+            79.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.7071067811865476, 
+          "corner_side_lengths_px": [
+            269.31394319641157, 
+            269.3640659033792, 
+            269.31394319641157, 
+            269.3640659033792
+          ], 
+          "corner_side_rms_px": 0.02506135348380667, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }, 
+          "orientation_corner_ratio": 0.5822784810126582, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 1207.5, 
+            "y_px": 540.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 1207.5, 
+              "y_px": 540.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 78.0, 
+              "x_px": 797.5, 
+              "y_px": 425.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1066.5, 
+              "y_px": 412.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1080.5, 
+              "y_px": 681.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 811.5, 
+              "y_px": 694.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }, 
+          "mean_center_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }, 
+          "pose_center_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }
+        }, 
+        "command_angle_deg": -90.0, 
+        "commanded_nozzle_rotation_deg": -90.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.6414372911868823, 
+        "error_x_mm": -0.23248654795605717, 
+        "error_y_mm": -0.5978225518869635, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.55151345204393, 
+        "measured_after_place_center_y_mm": 358.775177448113, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": -90.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": -135.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.55151345204393, 
+            "y": 358.775177448113, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.55151345204393, 
+            "y": 358.775177448113, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": -90.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": -90.0, 
+        "sample_index": 6, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 942.0, 
+          "y": 555.5
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.75, 
+          "bbox_center_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 931.5, 
+              "y_px": 366.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1132.5, 
+              "y_px": 546.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 952.5, 
+              "y_px": 744.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 751.5, 
+              "y_px": 564.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            80.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.4330127018922193, 
+          "corner_side_lengths_px": [
+            269.81660438156877, 
+            267.5892374517331, 
+            269.81660438156877, 
+            267.5892374517331
+          ], 
+          "corner_side_rms_px": 1.113683464917841, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }, 
+          "orientation_corner_ratio": 0.5642633228840125, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 1121.5, 
+            "y_px": 357.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 1121.5, 
+              "y_px": 357.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 931.5, 
+              "y_px": 366.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1132.5, 
+              "y_px": 546.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 952.5, 
+              "y_px": 744.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 751.5, 
+              "y_px": 564.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }, 
+          "mean_center_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }, 
+          "pose_center_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }
+        }, 
+        "command_angle_deg": -45.0, 
+        "commanded_nozzle_rotation_deg": -45.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.6512032864285153, 
+        "error_x_mm": -0.19927418396230223, 
+        "error_y_mm": -0.6199641278827812, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.5847258160377, 
+        "measured_after_place_center_y_mm": 358.7530358721172, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": -45.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": -90.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.5847258160377, 
+            "y": 358.7530358721172, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.5847258160377, 
+            "y": 358.7530358721172, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": -45.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": -45.0, 
+        "sample_index": 7, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 939.5, 
+          "y": 557.75
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.75, 
+          "bbox_center_px": {
+            "x": 939.5, 
+            "y": 557.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 798.5, 
+              "y_px": 430.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1068.5, 
+              "y_px": 417.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1080.5, 
+              "y_px": 685.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 810.5, 
+              "y_px": 697.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            80.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.4330127018922193, 
+          "corner_side_lengths_px": [
+            270.31278179176064, 
+            268.26852219371546, 
+            270.266535109325, 
+            267.2695268825086
+          ], 
+          "corner_side_rms_px": 1.3089748387785083, 
+          "mean_bbox_center_delta_px": 0.25, 
+          "mean_center_px": {
+            "x": 939.5, 
+            "y": 557.75
+          }, 
+          "orientation_corner_ratio": 0.5642633228840125, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 926.5, 
+            "y_px": 291.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 926.5, 
+              "y_px": 291.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 798.5, 
+              "y_px": 430.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1068.5, 
+              "y_px": 417.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1080.5, 
+              "y_px": 685.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 810.5, 
+              "y_px": 697.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 939.5, 
+            "y": 557.5
+          }, 
+          "center_consistency_rms_px": 0.1767766952966369, 
+          "diagonal_intersection_px": {
+            "x": 939.2486839378238, 
+            "y": 557.7727461139897
+          }, 
+          "mean_center_px": {
+            "x": 939.5, 
+            "y": 557.75
+          }, 
+          "pose_center_px": {
+            "x": 939.5, 
+            "y": 557.75
+          }
+        }, 
+        "command_angle_deg": 0.0, 
+        "commanded_nozzle_rotation_deg": 0.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.6836435690054302, 
+        "error_x_mm": -0.22695115395708854, 
+        "error_y_mm": -0.6448734008780548, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.5570488460429, 
+        "measured_after_place_center_y_mm": 358.72812659912194, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 0.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": -45.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.5570488460429, 
+            "y": 358.72812659912194, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 939.5, 
+            "y": 557.75
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.5570488460429, 
+            "y": 358.72812659912194, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 0.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 0.0, 
+        "sample_index": 8, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 935.0, 
+          "y": 562.0
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 927.5, 
+              "y_px": 372.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1125.5, 
+              "y_px": 553.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 942.5, 
+              "y_px": 751.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 744.5, 
+              "y_px": 570.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            268.26293072282647, 
+            269.61639416029584, 
+            268.26293072282647, 
+            269.61639416029584
+          ], 
+          "corner_side_rms_px": 0.6767317187346862, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }, 
+          "orientation_corner_ratio": 0.5660377358490566, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 737.5, 
+            "y_px": 381.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 737.5, 
+              "y_px": 381.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 927.5, 
+              "y_px": 372.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1125.5, 
+              "y_px": 553.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 942.5, 
+              "y_px": 751.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 744.5, 
+              "y_px": 570.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }, 
+          "mean_center_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }, 
+          "pose_center_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }
+        }, 
+        "command_angle_deg": 45.0, 
+        "commanded_nozzle_rotation_deg": 45.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.7452252239196449, 
+        "error_x_mm": -0.2767696999476357, 
+        "error_y_mm": -0.691924249869146, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.50723030005236, 
+        "measured_after_place_center_y_mm": 358.68107575013084, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 45.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 0.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.50723030005236, 
+            "y": 358.68107575013084, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.50723030005236, 
+            "y": 358.68107575013084, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 45.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 45.0, 
+        "sample_index": 9, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 933.75, 
+          "y": 562.5
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.25, 
+          "bbox_center_px": {
+            "x": 933.5, 
+            "y": 562.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 791.5, 
+              "y_px": 435.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1060.5, 
+              "y_px": 420.5
+            }, 
+            {
+              "radius_px": 78.0, 
+              "x_px": 1075.5, 
+              "y_px": 689.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 807.5, 
+              "y_px": 704.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            78.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.82915619758885, 
+          "corner_side_lengths_px": [
+            269.41789101691074, 
+            269.41789101691074, 
+            268.41944787961995, 
+            269.4754163184464
+          ], 
+          "corner_side_rms_px": 0.4412670011765275, 
+          "mean_bbox_center_delta_px": 0.25, 
+          "mean_center_px": {
+            "x": 933.75, 
+            "y": 562.5
+          }, 
+          "orientation_corner_ratio": 0.5678233438485805, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 665.5, 
+            "y_px": 577.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 665.5, 
+              "y_px": 577.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 791.5, 
+              "y_px": 435.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1060.5, 
+              "y_px": 420.5
+            }, 
+            {
+              "radius_px": 78.0, 
+              "x_px": 1075.5, 
+              "y_px": 689.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 807.5, 
+              "y_px": 704.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 933.5, 
+            "y": 562.5
+          }, 
+          "center_consistency_rms_px": 0.1767766952966369, 
+          "diagonal_intersection_px": {
+            "x": 933.7782815109234, 
+            "y": 562.748885576671
+          }, 
+          "mean_center_px": {
+            "x": 933.75, 
+            "y": 562.5
+          }, 
+          "pose_center_px": {
+            "x": 933.75, 
+            "y": 562.5
+          }
+        }, 
+        "command_angle_deg": 90.0, 
+        "commanded_nozzle_rotation_deg": 90.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.755581280857117, 
+        "error_x_mm": -0.2906081849450288, 
+        "error_y_mm": -0.6974596438681147, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.49339181505496, 
+        "measured_after_place_center_y_mm": 358.6755403561319, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 90.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 45.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.49339181505496, 
+            "y": 358.6755403561319, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 933.75, 
+            "y": 562.5
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.49339181505496, 
+            "y": 358.6755403561319, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 90.0, 
+        "raw_sample_error_warning": true, 
+        "requested_sample_angle_deg": 90.0, 
+        "sample_index": 10, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 933.0, 
+          "y": 561.0
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 920.5, 
+              "y_px": 371.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1123.5, 
+              "y_px": 549.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 945.5, 
+              "y_px": 750.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 742.5, 
+              "y_px": 572.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            269.98703672583986, 
+            268.48649872945197, 
+            269.98703672583986, 
+            268.48649872945197
+          ], 
+          "corner_side_rms_px": 0.7502689981939454, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }, 
+          "orientation_corner_ratio": 0.5786163522012578, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 755.5, 
+            "y_px": 760.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 755.5, 
+              "y_px": 760.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 920.5, 
+              "y_px": 371.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1123.5, 
+              "y_px": 549.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 945.5, 
+              "y_px": 750.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 742.5, 
+              "y_px": 572.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }, 
+          "mean_center_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }, 
+          "pose_center_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }
+        }, 
+        "command_angle_deg": 135.0, 
+        "commanded_nozzle_rotation_deg": 135.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.7435787701570226, 
+        "error_x_mm": -0.29891127594345335, 
+        "error_y_mm": -0.6808534618712656, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.48508872405654, 
+        "measured_after_place_center_y_mm": 358.6921465381287, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 135.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 90.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.48508872405654, 
+            "y": 358.6921465381287, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.48508872405654, 
+            "y": 358.6921465381287, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 135.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 135.0, 
+        "sample_index": 11, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 44.0, 
+        "center_px": {
+          "x": 942.5, 
+          "y": 562.25
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.0, 
+          "bbox_center_px": {
+            "x": 942.5, 
+            "y": 562.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 801.5, 
+              "y_px": 434.5
+            }, 
+            {
+              "radius_px": 78.0, 
+              "x_px": 1072.5, 
+              "y_px": 422.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1083.5, 
+              "y_px": 690.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 812.5, 
+              "y_px": 701.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            78.0, 
+            79.0, 
+            79.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.7071067811865476, 
+          "corner_side_lengths_px": [
+            271.26555254952666, 
+            268.2256512714621, 
+            271.2231553536681, 
+            267.22649569232465
+          ], 
+          "corner_side_rms_px": 1.7943210526735338, 
+          "mean_bbox_center_delta_px": 0.25, 
+          "mean_center_px": {
+            "x": 942.5, 
+            "y": 562.25
+          }, 
+          "orientation_corner_ratio": 0.5822784810126582, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 953.5, 
+            "y_px": 828.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 953.5, 
+              "y_px": 828.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 801.5, 
+              "y_px": 434.5
+            }, 
+            {
+              "radius_px": 78.0, 
+              "x_px": 1072.5, 
+              "y_px": 422.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1083.5, 
+              "y_px": 690.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 812.5, 
+              "y_px": 701.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 942.5, 
+            "y": 562.0
+          }, 
+          "center_consistency_rms_px": 0.1767766952966369, 
+          "diagonal_intersection_px": {
+            "x": 942.247586719729, 
+            "y": 562.2708588661369
+          }, 
+          "mean_center_px": {
+            "x": 942.5, 
+            "y": 562.25
+          }, 
+          "pose_center_px": {
+            "x": 942.5, 
+            "y": 562.25
+          }
+        }, 
+        "command_angle_deg": 179.0, 
+        "commanded_nozzle_rotation_deg": 179.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.7212015112162252, 
+        "error_x_mm": -0.19373878996339045, 
+        "error_y_mm": -0.6946919468686019, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.5902612100366, 
+        "measured_after_place_center_y_mm": 358.6783080531314, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 179.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 135.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.5902612100366, 
+            "y": 358.6783080531314, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 942.5, 
+            "y": 562.25
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.5902612100366, 
+            "y": 358.6783080531314, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 179.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 179.0, 
+        "sample_index": 12, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 46.0, 
+        "center_px": {
+          "x": 940.0, 
+          "y": 565.0
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 928.5, 
+              "y_px": 375.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1130.5, 
+              "y_px": 552.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 951.5, 
+              "y_px": 754.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 749.5, 
+              "y_px": 577.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            268.57587382339466, 
+            269.89812893015767, 
+            268.57587382339466, 
+            269.89812893015767
+          ], 
+          "corner_side_rms_px": 0.6611275533815046, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }, 
+          "orientation_corner_ratio": 0.5786163522012578, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 1141.5, 
+            "y_px": 741.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 1141.5, 
+              "y_px": 741.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 928.5, 
+              "y_px": 375.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1130.5, 
+              "y_px": 552.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 951.5, 
+              "y_px": 754.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 749.5, 
+              "y_px": 577.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }, 
+          "mean_center_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }, 
+          "pose_center_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }
+        }, 
+        "command_angle_deg": -135.0, 
+        "commanded_nozzle_rotation_deg": 225.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.7581873432881238, 
+        "error_x_mm": -0.2214157599581199, 
+        "error_y_mm": -0.7251366138628441, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.5625842400419, 
+        "measured_after_place_center_y_mm": 358.64786338613715, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": -135.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 179.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.5625842400419, 
+            "y": 358.64786338613715, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.5625842400419, 
+            "y": 358.64786338613715, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": -135.0, 
+        "raw_sample_error_warning": true, 
+        "requested_sample_angle_deg": -135.0, 
+        "sample_index": 13, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 939.5, 
+          "y": 558.75
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.25, 
+          "bbox_center_px": {
+            "x": 939.5, 
+            "y": 559.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 78.0, 
+              "x_px": 797.5, 
+              "y_px": 431.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1066.5, 
+              "y_px": 417.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1081.5, 
+              "y_px": 685.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 812.5, 
+              "y_px": 700.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            78.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.82915619758885, 
+          "corner_side_lengths_px": [
+            269.3640659033792, 
+            268.41944787961995, 
+            269.41789101691074, 
+            269.41789101691074
+          ], 
+          "corner_side_rms_px": 0.4251378374502739, 
+          "mean_bbox_center_delta_px": 0.25, 
+          "mean_center_px": {
+            "x": 939.5, 
+            "y": 558.75
+          }, 
+          "orientation_corner_ratio": 0.5678233438485805, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 1207.5, 
+            "y_px": 544.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 1207.5, 
+              "y_px": 544.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 78.0, 
+              "x_px": 797.5, 
+              "y_px": 431.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1066.5, 
+              "y_px": 417.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1081.5, 
+              "y_px": 685.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 812.5, 
+              "y_px": 700.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 939.5, 
+            "y": 559.0
+          }, 
+          "center_consistency_rms_px": 0.1767766952966369, 
+          "diagonal_intersection_px": {
+            "x": 939.7489371100436, 
+            "y": 558.7226409364474
+          }, 
+          "mean_center_px": {
+            "x": 939.5, 
+            "y": 558.75
+          }, 
+          "pose_center_px": {
+            "x": 939.5, 
+            "y": 558.75
+          }
+        }, 
+        "command_angle_deg": -90.0, 
+        "commanded_nozzle_rotation_deg": -90.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.6940962506760591, 
+        "error_x_mm": -0.22695115395708854, 
+        "error_y_mm": -0.6559441888759352, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.5570488460429, 
+        "measured_after_place_center_y_mm": 358.71705581112406, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": -90.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": -135.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.5570488460429, 
+            "y": 358.71705581112406, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 939.5, 
+            "y": 558.75
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.5570488460429, 
+            "y": 358.71705581112406, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": -90.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": -90.0, 
+        "sample_index": 14, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 943.0, 
+          "y": 554.5
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.75, 
+          "bbox_center_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 933.5, 
+              "y_px": 365.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1133.5, 
+              "y_px": 545.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 952.5, 
+              "y_px": 743.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 752.5, 
+              "y_px": 563.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            80.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.4330127018922193, 
+          "corner_side_lengths_px": [
+            269.0724809414742, 
+            268.26293072282647, 
+            269.0724809414742, 
+            268.26293072282647
+          ], 
+          "corner_side_rms_px": 0.4047751093238787, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }, 
+          "orientation_corner_ratio": 0.5768025078369906, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 1123.5, 
+            "y_px": 356.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 1123.5, 
+              "y_px": 356.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 933.5, 
+              "y_px": 365.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1133.5, 
+              "y_px": 545.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 952.5, 
+              "y_px": 743.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 752.5, 
+              "y_px": 563.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }, 
+          "mean_center_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }, 
+          "pose_center_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }
+        }, 
+        "command_angle_deg": -45.0, 
+        "commanded_nozzle_rotation_deg": -45.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.6373159480262997, 
+        "error_x_mm": -0.18820339596442182, 
+        "error_y_mm": -0.608893339884844, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.59579660403557, 
+        "measured_after_place_center_y_mm": 358.76410666011515, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": -45.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": -90.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.59579660403557, 
+            "y": 358.76410666011515, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.59579660403557, 
+            "y": 358.76410666011515, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": -45.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": -45.0, 
+        "sample_index": 15, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }
+    ], 
+    "sign_selection_method": "explicit_negative_bias_not_rms_tie", 
+    "valid_sample_count": 16
+  }, 
+  "initial_work_pose": {
+    "rotation": 0.0, 
+    "x": 306.84765703098793, 
+    "y": 359.1681904220387, 
+    "z": 3.0
+  }, 
+  "machine_config_modified": false, 
+  "nozzle_name": "Pick Head", 
+  "part_id_or_name": "Calibration_Square", 
+  "storage": {
+    "configured": {
+      "rotation": 0.0, 
+      "x": 330.0, 
+      "y": 397.4, 
+      "z": 3.0
+    }, 
+    "detected_initial_pick": {
+      "rotation": 0.0, 
+      "x": 330.09963709198115, 
+      "y": 396.60567096115017, 
+      "z": 3.0
+    }, 
+    "detected_minus_configured": {
+      "dx": 0.09963709198115112, 
+      "dy": -0.7943290388498099
+    }, 
+    "used_for_calibration": false
+  }, 
+  "storage_return": {
+    "correction_used": true, 
+    "correction_x_mm": 0.2276467488514793, 
+    "correction_y_mm": 0.6267099880198301, 
+    "diagnostic_preview_used": true, 
+    "reason": "residual same-run preview delta on top of active OpenPnP compensation", 
+    "status": "placed", 
+    "target": {
+      "rotation": 0.0, 
+      "x": 330.2276467488515, 
+      "y": 398.02670998801983, 
+      "z": 3.0
+    }
+  }, 
+  "timestamp": 1779381983.449, 
+  "verification": {
+    "model": "round_object_nozzle_axis_fit", 
+    "passed": false, 
+    "peak_error_mm": 0.627347384421579, 
+    "rms_error_mm": 0.1714649075069225, 
+    "samples": [
+      {
+        "actual_rotation_delta_deg": 0.0, 
+        "center_px": {
+          "x": 957.75, 
+          "y": 495.5
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 958.0, 
+            "y": 495.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 818.5, 
+              "y_px": 366.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1088.5, 
+              "y_px": 357.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1097.5, 
+              "y_px": 624.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 826.5, 
+              "y_px": 633.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            270.14995835646545, 
+            267.15164233071823, 
+            271.14940531006147, 
+            267.1198233003309
+          ], 
+          "corner_side_rms_px": 1.7921907704776943, 
+          "mean_bbox_center_delta_px": 0.25, 
+          "mean_center_px": {
+            "x": 957.75, 
+            "y": 495.5
+          }, 
+          "orientation_corner_ratio": 0.5660377358490566, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 949.5, 
+            "y_px": 229.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 949.5, 
+              "y_px": 229.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 818.5, 
+              "y_px": 366.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1088.5, 
+              "y_px": 357.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1097.5, 
+              "y_px": 624.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 826.5, 
+              "y_px": 633.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 958.0, 
+            "y": 495.5
+          }, 
+          "center_consistency_rms_px": 0.1767766952966369, 
+          "diagonal_intersection_px": {
+            "x": 957.733734439834, 
+            "y": 495.25377593361
+          }, 
+          "mean_center_px": {
+            "x": 957.75, 
+            "y": 495.5
+          }, 
+          "pose_center_px": {
+            "x": 957.75, 
+            "y": 495.5
+          }
+        }, 
+        "command_angle_deg": 0.0, 
+        "commanded_nozzle_rotation_deg": 0.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.05080816303968628, 
+        "error_x_mm": -0.024909272995273568, 
+        "error_y_mm": 0.04428315199163535, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.7590907270047, 
+        "measured_after_place_center_y_mm": 359.4172831519916, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 0.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 0.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.7590907270047, 
+            "y": 359.4172831519916, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 957.75, 
+            "y": 495.5
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.7590907270047, 
+            "y": 359.4172831519916, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 0.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 0.0, 
+        "sample_index": 0, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 935.0, 
+          "y": 563.0
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 929.5, 
+              "y_px": 373.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1125.5, 
+              "y_px": 556.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 940.5, 
+              "y_px": 752.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 744.5, 
+              "y_px": 569.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            268.1510768205118, 
+            269.51994360343724, 
+            268.1510768205118, 
+            269.51994360343724
+          ], 
+          "corner_side_rms_px": 0.6844333914627327, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }, 
+          "orientation_corner_ratio": 0.5786163522012578, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 739.5, 
+            "y_px": 380.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 739.5, 
+              "y_px": 380.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 929.5, 
+              "y_px": 373.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1125.5, 
+              "y_px": 556.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 940.5, 
+              "y_px": 752.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 744.5, 
+              "y_px": 569.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }, 
+          "mean_center_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }, 
+          "pose_center_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }
+        }, 
+        "command_angle_deg": 45.0, 
+        "commanded_nozzle_rotation_deg": 45.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.755515380435664, 
+        "error_x_mm": -0.2767696999476357, 
+        "error_y_mm": -0.7029950378670833, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.50723030005236, 
+        "measured_after_place_center_y_mm": 358.6700049621329, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 45.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 0.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.50723030005236, 
+            "y": 358.6700049621329, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 935.0, 
+            "y": 563.0
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.50723030005236, 
+            "y": 358.6700049621329, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 45.0, 
+        "raw_sample_error_warning": true, 
+        "requested_sample_angle_deg": 45.0, 
+        "sample_index": 1, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 934.25, 
+          "y": 559.75
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.25, 
+          "bbox_center_px": {
+            "x": 934.0, 
+            "y": 559.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 793.5, 
+              "y_px": 431.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1062.5, 
+              "y_px": 419.5
+            }, 
+            {
+              "radius_px": 78.0, 
+              "x_px": 1074.5, 
+              "y_px": 688.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 806.5, 
+              "y_px": 699.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            78.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.82915619758885, 
+          "corner_side_lengths_px": [
+            269.2675249635574, 
+            269.2675249635574, 
+            268.2256512714621, 
+            268.31511325305553
+          ], 
+          "corner_side_rms_px": 0.49957364067480703, 
+          "mean_bbox_center_delta_px": 0.3535533905932738, 
+          "mean_center_px": {
+            "x": 934.25, 
+            "y": 559.75
+          }, 
+          "orientation_corner_ratio": 0.5678233438485805, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 666.5, 
+            "y_px": 571.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 666.5, 
+              "y_px": 571.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 793.5, 
+              "y_px": 431.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1062.5, 
+              "y_px": 419.5
+            }, 
+            {
+              "radius_px": 78.0, 
+              "x_px": 1074.5, 
+              "y_px": 688.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 806.5, 
+              "y_px": 699.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 934.0, 
+            "y": 559.5
+          }, 
+          "center_consistency_rms_px": 0.25, 
+          "diagonal_intersection_px": {
+            "x": 934.0233401627997, 
+            "y": 560.0213466969378
+          }, 
+          "mean_center_px": {
+            "x": 934.25, 
+            "y": 559.75
+          }, 
+          "pose_center_px": {
+            "x": 934.25, 
+            "y": 559.75
+          }
+        }, 
+        "command_angle_deg": 90.0, 
+        "commanded_nozzle_rotation_deg": 90.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.725379538939348, 
+        "error_x_mm": -0.28507279094611704, 
+        "error_y_mm": -0.6670149768738725, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.4989272090539, 
+        "measured_after_place_center_y_mm": 358.7059850231261, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 90.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 45.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.4989272090539, 
+            "y": 358.7059850231261, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 934.25, 
+            "y": 559.75
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.4989272090539, 
+            "y": 358.7059850231261, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 90.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 90.0, 
+        "sample_index": 2, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 934.25, 
+          "y": 563.25
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 934.0, 
+            "y": 563.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 924.5, 
+              "y_px": 373.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1124.5, 
+              "y_px": 554.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 944.5, 
+              "y_px": 752.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 743.5, 
+              "y_px": 572.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            269.74246977441277, 
+            267.5892374517331, 
+            269.81660438156877, 
+            269.0018587296378
+          ], 
+          "corner_side_rms_px": 0.894807342648007, 
+          "mean_bbox_center_delta_px": 0.3535533905932738, 
+          "mean_center_px": {
+            "x": 934.25, 
+            "y": 563.25
+          }, 
+          "orientation_corner_ratio": 0.5786163522012578, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 754.5, 
+            "y_px": 760.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 754.5, 
+              "y_px": 760.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 924.5, 
+              "y_px": 373.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1124.5, 
+              "y_px": 554.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 944.5, 
+              "y_px": 752.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 743.5, 
+              "y_px": 572.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 934.0, 
+            "y": 563.0
+          }, 
+          "center_consistency_rms_px": 0.25, 
+          "diagonal_intersection_px": {
+            "x": 934.5250761610677, 
+            "y": 563.475193252233
+          }, 
+          "mean_center_px": {
+            "x": 934.25, 
+            "y": 563.25
+          }, 
+          "pose_center_px": {
+            "x": 934.25, 
+            "y": 563.25
+          }
+        }, 
+        "command_angle_deg": 135.0, 
+        "commanded_nozzle_rotation_deg": 135.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.7611619630959665, 
+        "error_x_mm": -0.28507279094611704, 
+        "error_y_mm": -0.7057627348665392, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.4989272090539, 
+        "measured_after_place_center_y_mm": 358.66723726513345, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 135.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 90.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.4989272090539, 
+            "y": 358.66723726513345, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 934.25, 
+            "y": 563.25
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.4989272090539, 
+            "y": 358.66723726513345, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 135.0, 
+        "raw_sample_error_warning": true, 
+        "requested_sample_angle_deg": 135.0, 
+        "sample_index": 3, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 44.0, 
+        "center_px": {
+          "x": 942.25, 
+          "y": 562.0
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.75, 
+          "bbox_center_px": {
+            "x": 942.0, 
+            "y": 562.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 802.5, 
+              "y_px": 432.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1073.5, 
+              "y_px": 424.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1081.5, 
+              "y_px": 691.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 811.5, 
+              "y_px": 699.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            80.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.4330127018922193, 
+          "corner_side_lengths_px": [
+            271.1180554666177, 
+            267.1198233003309, 
+            270.1184925176357, 
+            267.15164233071823
+          ], 
+          "corner_side_rms_px": 1.7768062863298817, 
+          "mean_bbox_center_delta_px": 0.25, 
+          "mean_center_px": {
+            "x": 942.25, 
+            "y": 562.0
+          }, 
+          "orientation_corner_ratio": 0.5768025078369906, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 950.5, 
+            "y_px": 828.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 950.5, 
+              "y_px": 828.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 802.5, 
+              "y_px": 432.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1073.5, 
+              "y_px": 424.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1081.5, 
+              "y_px": 691.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 811.5, 
+              "y_px": 699.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 942.0, 
+            "y": 562.0
+          }, 
+          "center_consistency_rms_px": 0.1767766952966369, 
+          "diagonal_intersection_px": {
+            "x": 942.2653320238202, 
+            "y": 562.2463118070589
+          }, 
+          "mean_center_px": {
+            "x": 942.25, 
+            "y": 562.0
+          }, 
+          "pose_center_px": {
+            "x": 942.25, 
+            "y": 562.0
+          }
+        }, 
+        "command_angle_deg": 179.0, 
+        "commanded_nozzle_rotation_deg": 179.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.7192871241552011, 
+        "error_x_mm": -0.19650648696284634, 
+        "error_y_mm": -0.691924249869146, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.58749351303715, 
+        "measured_after_place_center_y_mm": 358.68107575013084, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 179.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 135.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.58749351303715, 
+            "y": 358.68107575013084, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 942.25, 
+            "y": 562.0
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.58749351303715, 
+            "y": 358.68107575013084, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 179.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 179.0, 
+        "sample_index": 4, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 46.0, 
+        "center_px": {
+          "x": 940.0, 
+          "y": 561.5
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 930.5, 
+              "y_px": 371.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1130.5, 
+              "y_px": 551.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 949.5, 
+              "y_px": 751.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 749.5, 
+              "y_px": 571.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            269.0724809414742, 
+            269.74246977441277, 
+            269.0724809414742, 
+            269.74246977441277
+          ], 
+          "corner_side_rms_px": 0.3349944164692715, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }, 
+          "orientation_corner_ratio": 0.5660377358490566, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 1139.5, 
+            "y_px": 739.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 1139.5, 
+              "y_px": 739.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 930.5, 
+              "y_px": 371.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1130.5, 
+              "y_px": 551.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 949.5, 
+              "y_px": 751.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 749.5, 
+              "y_px": 571.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }, 
+          "mean_center_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }, 
+          "pose_center_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }
+        }, 
+        "command_angle_deg": -135.0, 
+        "commanded_nozzle_rotation_deg": 225.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.7212174430923055, 
+        "error_x_mm": -0.2214157599581199, 
+        "error_y_mm": -0.6863888558701774, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.5625842400419, 
+        "measured_after_place_center_y_mm": 358.6866111441298, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": -135.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 179.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.5625842400419, 
+            "y": 358.6866111441298, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 940.0, 
+            "y": 561.5
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.5625842400419, 
+            "y": 358.6866111441298, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": -135.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": -135.0, 
+        "sample_index": 5, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 939.0, 
+          "y": 553.5
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.0, 
+          "bbox_center_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 78.0, 
+              "x_px": 797.5, 
+              "y_px": 425.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1066.5, 
+              "y_px": 412.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1080.5, 
+              "y_px": 681.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 811.5, 
+              "y_px": 694.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            78.0, 
+            79.0, 
+            79.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.7071067811865476, 
+          "corner_side_lengths_px": [
+            269.31394319641157, 
+            269.3640659033792, 
+            269.31394319641157, 
+            269.3640659033792
+          ], 
+          "corner_side_rms_px": 0.02506135348380667, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }, 
+          "orientation_corner_ratio": 0.5822784810126582, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 1207.5, 
+            "y_px": 540.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 1207.5, 
+              "y_px": 540.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 78.0, 
+              "x_px": 797.5, 
+              "y_px": 425.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1066.5, 
+              "y_px": 412.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1080.5, 
+              "y_px": 681.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 811.5, 
+              "y_px": 694.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }, 
+          "mean_center_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }, 
+          "pose_center_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }
+        }, 
+        "command_angle_deg": -90.0, 
+        "commanded_nozzle_rotation_deg": -90.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.6414372911868823, 
+        "error_x_mm": -0.23248654795605717, 
+        "error_y_mm": -0.5978225518869635, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.55151345204393, 
+        "measured_after_place_center_y_mm": 358.775177448113, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": -90.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": -135.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.55151345204393, 
+            "y": 358.775177448113, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 939.0, 
+            "y": 553.5
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.55151345204393, 
+            "y": 358.775177448113, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": -90.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": -90.0, 
+        "sample_index": 6, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 942.0, 
+          "y": 555.5
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.75, 
+          "bbox_center_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 931.5, 
+              "y_px": 366.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1132.5, 
+              "y_px": 546.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 952.5, 
+              "y_px": 744.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 751.5, 
+              "y_px": 564.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            80.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.4330127018922193, 
+          "corner_side_lengths_px": [
+            269.81660438156877, 
+            267.5892374517331, 
+            269.81660438156877, 
+            267.5892374517331
+          ], 
+          "corner_side_rms_px": 1.113683464917841, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }, 
+          "orientation_corner_ratio": 0.5642633228840125, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 1121.5, 
+            "y_px": 357.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 1121.5, 
+              "y_px": 357.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 931.5, 
+              "y_px": 366.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1132.5, 
+              "y_px": 546.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 952.5, 
+              "y_px": 744.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 751.5, 
+              "y_px": 564.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }, 
+          "mean_center_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }, 
+          "pose_center_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }
+        }, 
+        "command_angle_deg": -45.0, 
+        "commanded_nozzle_rotation_deg": -45.0, 
+        "cycle_index": 0, 
+        "error_mag_mm": 0.6512032864285153, 
+        "error_x_mm": -0.19927418396230223, 
+        "error_y_mm": -0.6199641278827812, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.5847258160377, 
+        "measured_after_place_center_y_mm": 358.7530358721172, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": -45.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": -90.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.5847258160377, 
+            "y": 358.7530358721172, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 942.0, 
+            "y": 555.5
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.5847258160377, 
+            "y": 358.7530358721172, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": -45.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": -45.0, 
+        "sample_index": 7, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 939.5, 
+          "y": 557.75
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.75, 
+          "bbox_center_px": {
+            "x": 939.5, 
+            "y": 557.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 798.5, 
+              "y_px": 430.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1068.5, 
+              "y_px": 417.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1080.5, 
+              "y_px": 685.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 810.5, 
+              "y_px": 697.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            80.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.4330127018922193, 
+          "corner_side_lengths_px": [
+            270.31278179176064, 
+            268.26852219371546, 
+            270.266535109325, 
+            267.2695268825086
+          ], 
+          "corner_side_rms_px": 1.3089748387785083, 
+          "mean_bbox_center_delta_px": 0.25, 
+          "mean_center_px": {
+            "x": 939.5, 
+            "y": 557.75
+          }, 
+          "orientation_corner_ratio": 0.5642633228840125, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 926.5, 
+            "y_px": 291.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 926.5, 
+              "y_px": 291.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 798.5, 
+              "y_px": 430.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1068.5, 
+              "y_px": 417.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1080.5, 
+              "y_px": 685.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 810.5, 
+              "y_px": 697.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 939.5, 
+            "y": 557.5
+          }, 
+          "center_consistency_rms_px": 0.1767766952966369, 
+          "diagonal_intersection_px": {
+            "x": 939.2486839378238, 
+            "y": 557.7727461139897
+          }, 
+          "mean_center_px": {
+            "x": 939.5, 
+            "y": 557.75
+          }, 
+          "pose_center_px": {
+            "x": 939.5, 
+            "y": 557.75
+          }
+        }, 
+        "command_angle_deg": 0.0, 
+        "commanded_nozzle_rotation_deg": 0.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.6836435690054302, 
+        "error_x_mm": -0.22695115395708854, 
+        "error_y_mm": -0.6448734008780548, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.5570488460429, 
+        "measured_after_place_center_y_mm": 358.72812659912194, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 0.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": -45.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.5570488460429, 
+            "y": 358.72812659912194, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 939.5, 
+            "y": 557.75
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.5570488460429, 
+            "y": 358.72812659912194, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 0.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 0.0, 
+        "sample_index": 8, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 935.0, 
+          "y": 562.0
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 927.5, 
+              "y_px": 372.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1125.5, 
+              "y_px": 553.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 942.5, 
+              "y_px": 751.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 744.5, 
+              "y_px": 570.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            268.26293072282647, 
+            269.61639416029584, 
+            268.26293072282647, 
+            269.61639416029584
+          ], 
+          "corner_side_rms_px": 0.6767317187346862, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }, 
+          "orientation_corner_ratio": 0.5660377358490566, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 737.5, 
+            "y_px": 381.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 737.5, 
+              "y_px": 381.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 927.5, 
+              "y_px": 372.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1125.5, 
+              "y_px": 553.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 942.5, 
+              "y_px": 751.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 744.5, 
+              "y_px": 570.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }, 
+          "mean_center_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }, 
+          "pose_center_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }
+        }, 
+        "command_angle_deg": 45.0, 
+        "commanded_nozzle_rotation_deg": 45.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.7452252239196449, 
+        "error_x_mm": -0.2767696999476357, 
+        "error_y_mm": -0.691924249869146, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.50723030005236, 
+        "measured_after_place_center_y_mm": 358.68107575013084, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 45.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 0.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.50723030005236, 
+            "y": 358.68107575013084, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 935.0, 
+            "y": 562.0
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.50723030005236, 
+            "y": 358.68107575013084, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 45.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 45.0, 
+        "sample_index": 9, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 933.75, 
+          "y": 562.5
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.25, 
+          "bbox_center_px": {
+            "x": 933.5, 
+            "y": 562.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 791.5, 
+              "y_px": 435.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1060.5, 
+              "y_px": 420.5
+            }, 
+            {
+              "radius_px": 78.0, 
+              "x_px": 1075.5, 
+              "y_px": 689.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 807.5, 
+              "y_px": 704.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            78.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.82915619758885, 
+          "corner_side_lengths_px": [
+            269.41789101691074, 
+            269.41789101691074, 
+            268.41944787961995, 
+            269.4754163184464
+          ], 
+          "corner_side_rms_px": 0.4412670011765275, 
+          "mean_bbox_center_delta_px": 0.25, 
+          "mean_center_px": {
+            "x": 933.75, 
+            "y": 562.5
+          }, 
+          "orientation_corner_ratio": 0.5678233438485805, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 665.5, 
+            "y_px": 577.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 665.5, 
+              "y_px": 577.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 791.5, 
+              "y_px": 435.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1060.5, 
+              "y_px": 420.5
+            }, 
+            {
+              "radius_px": 78.0, 
+              "x_px": 1075.5, 
+              "y_px": 689.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 807.5, 
+              "y_px": 704.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 933.5, 
+            "y": 562.5
+          }, 
+          "center_consistency_rms_px": 0.1767766952966369, 
+          "diagonal_intersection_px": {
+            "x": 933.7782815109234, 
+            "y": 562.748885576671
+          }, 
+          "mean_center_px": {
+            "x": 933.75, 
+            "y": 562.5
+          }, 
+          "pose_center_px": {
+            "x": 933.75, 
+            "y": 562.5
+          }
+        }, 
+        "command_angle_deg": 90.0, 
+        "commanded_nozzle_rotation_deg": 90.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.755581280857117, 
+        "error_x_mm": -0.2906081849450288, 
+        "error_y_mm": -0.6974596438681147, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.49339181505496, 
+        "measured_after_place_center_y_mm": 358.6755403561319, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 90.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 45.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.49339181505496, 
+            "y": 358.6755403561319, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 933.75, 
+            "y": 562.5
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.49339181505496, 
+            "y": 358.6755403561319, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 90.0, 
+        "raw_sample_error_warning": true, 
+        "requested_sample_angle_deg": 90.0, 
+        "sample_index": 10, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 933.0, 
+          "y": 561.0
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 920.5, 
+              "y_px": 371.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1123.5, 
+              "y_px": 549.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 945.5, 
+              "y_px": 750.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 742.5, 
+              "y_px": 572.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            269.98703672583986, 
+            268.48649872945197, 
+            269.98703672583986, 
+            268.48649872945197
+          ], 
+          "corner_side_rms_px": 0.7502689981939454, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }, 
+          "orientation_corner_ratio": 0.5786163522012578, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 755.5, 
+            "y_px": 760.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 755.5, 
+              "y_px": 760.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 920.5, 
+              "y_px": 371.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1123.5, 
+              "y_px": 549.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 945.5, 
+              "y_px": 750.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 742.5, 
+              "y_px": 572.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }, 
+          "mean_center_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }, 
+          "pose_center_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }
+        }, 
+        "command_angle_deg": 135.0, 
+        "commanded_nozzle_rotation_deg": 135.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.7435787701570226, 
+        "error_x_mm": -0.29891127594345335, 
+        "error_y_mm": -0.6808534618712656, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.48508872405654, 
+        "measured_after_place_center_y_mm": 358.6921465381287, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 135.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 90.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.48508872405654, 
+            "y": 358.6921465381287, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 933.0, 
+            "y": 561.0
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.48508872405654, 
+            "y": 358.6921465381287, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 135.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 135.0, 
+        "sample_index": 11, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 44.0, 
+        "center_px": {
+          "x": 942.5, 
+          "y": 562.25
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.0, 
+          "bbox_center_px": {
+            "x": 942.5, 
+            "y": 562.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 801.5, 
+              "y_px": 434.5
+            }, 
+            {
+              "radius_px": 78.0, 
+              "x_px": 1072.5, 
+              "y_px": 422.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1083.5, 
+              "y_px": 690.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 812.5, 
+              "y_px": 701.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            78.0, 
+            79.0, 
+            79.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.7071067811865476, 
+          "corner_side_lengths_px": [
+            271.26555254952666, 
+            268.2256512714621, 
+            271.2231553536681, 
+            267.22649569232465
+          ], 
+          "corner_side_rms_px": 1.7943210526735338, 
+          "mean_bbox_center_delta_px": 0.25, 
+          "mean_center_px": {
+            "x": 942.5, 
+            "y": 562.25
+          }, 
+          "orientation_corner_ratio": 0.5822784810126582, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 953.5, 
+            "y_px": 828.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 953.5, 
+              "y_px": 828.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 801.5, 
+              "y_px": 434.5
+            }, 
+            {
+              "radius_px": 78.0, 
+              "x_px": 1072.5, 
+              "y_px": 422.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1083.5, 
+              "y_px": 690.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 812.5, 
+              "y_px": 701.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 942.5, 
+            "y": 562.0
+          }, 
+          "center_consistency_rms_px": 0.1767766952966369, 
+          "diagonal_intersection_px": {
+            "x": 942.247586719729, 
+            "y": 562.2708588661369
+          }, 
+          "mean_center_px": {
+            "x": 942.5, 
+            "y": 562.25
+          }, 
+          "pose_center_px": {
+            "x": 942.5, 
+            "y": 562.25
+          }
+        }, 
+        "command_angle_deg": 179.0, 
+        "commanded_nozzle_rotation_deg": 179.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.7212015112162252, 
+        "error_x_mm": -0.19373878996339045, 
+        "error_y_mm": -0.6946919468686019, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.5902612100366, 
+        "measured_after_place_center_y_mm": 358.6783080531314, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": 179.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 135.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.5902612100366, 
+            "y": 358.6783080531314, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 942.5, 
+            "y": 562.25
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.5902612100366, 
+            "y": 358.6783080531314, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": 179.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": 179.0, 
+        "sample_index": 12, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 46.0, 
+        "center_px": {
+          "x": 940.0, 
+          "y": 565.0
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.5, 
+          "bbox_center_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 928.5, 
+              "y_px": 375.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1130.5, 
+              "y_px": 552.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 951.5, 
+              "y_px": 754.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 749.5, 
+              "y_px": 577.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.5, 
+          "corner_side_lengths_px": [
+            268.57587382339466, 
+            269.89812893015767, 
+            268.57587382339466, 
+            269.89812893015767
+          ], 
+          "corner_side_rms_px": 0.6611275533815046, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }, 
+          "orientation_corner_ratio": 0.5786163522012578, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 1141.5, 
+            "y_px": 741.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 1141.5, 
+              "y_px": 741.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 79.0, 
+              "x_px": 928.5, 
+              "y_px": 375.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1130.5, 
+              "y_px": 552.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 951.5, 
+              "y_px": 754.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 749.5, 
+              "y_px": 577.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }, 
+          "mean_center_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }, 
+          "pose_center_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }
+        }, 
+        "command_angle_deg": -135.0, 
+        "commanded_nozzle_rotation_deg": 225.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.7581873432881238, 
+        "error_x_mm": -0.2214157599581199, 
+        "error_y_mm": -0.7251366138628441, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.5625842400419, 
+        "measured_after_place_center_y_mm": 358.64786338613715, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": -135.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": 179.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.5625842400419, 
+            "y": 358.64786338613715, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 940.0, 
+            "y": 565.0
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.5625842400419, 
+            "y": 358.64786338613715, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": -135.0, 
+        "raw_sample_error_warning": true, 
+        "requested_sample_angle_deg": -135.0, 
+        "sample_index": 13, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 939.5, 
+          "y": 558.75
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.25, 
+          "bbox_center_px": {
+            "x": 939.5, 
+            "y": 559.0
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 78.0, 
+              "x_px": 797.5, 
+              "y_px": 431.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1066.5, 
+              "y_px": 417.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1081.5, 
+              "y_px": 685.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 812.5, 
+              "y_px": 700.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            78.0, 
+            79.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.82915619758885, 
+          "corner_side_lengths_px": [
+            269.3640659033792, 
+            268.41944787961995, 
+            269.41789101691074, 
+            269.41789101691074
+          ], 
+          "corner_side_rms_px": 0.4251378374502739, 
+          "mean_bbox_center_delta_px": 0.25, 
+          "mean_center_px": {
+            "x": 939.5, 
+            "y": 558.75
+          }, 
+          "orientation_corner_ratio": 0.5678233438485805, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 45.0, 
+            "x_px": 1207.5, 
+            "y_px": 544.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 45.0, 
+              "x_px": 1207.5, 
+              "y_px": 544.5
+            }
+          ], 
+          "orientation_radius_px": 45.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 78.0, 
+              "x_px": 797.5, 
+              "y_px": 431.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 1066.5, 
+              "y_px": 417.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1081.5, 
+              "y_px": 685.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 812.5, 
+              "y_px": 700.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 939.5, 
+            "y": 559.0
+          }, 
+          "center_consistency_rms_px": 0.1767766952966369, 
+          "diagonal_intersection_px": {
+            "x": 939.7489371100436, 
+            "y": 558.7226409364474
+          }, 
+          "mean_center_px": {
+            "x": 939.5, 
+            "y": 558.75
+          }, 
+          "pose_center_px": {
+            "x": 939.5, 
+            "y": 558.75
+          }
+        }, 
+        "command_angle_deg": -90.0, 
+        "commanded_nozzle_rotation_deg": -90.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.6940962506760591, 
+        "error_x_mm": -0.22695115395708854, 
+        "error_y_mm": -0.6559441888759352, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.5570488460429, 
+        "measured_after_place_center_y_mm": 358.71705581112406, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": -90.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": -135.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.5570488460429, 
+            "y": 358.71705581112406, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 939.5, 
+            "y": 558.75
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.5570488460429, 
+            "y": 358.71705581112406, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": -90.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": -90.0, 
+        "sample_index": 14, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }, 
+      {
+        "actual_rotation_delta_deg": 45.0, 
+        "center_px": {
+          "x": 943.0, 
+          "y": 554.5
+        }, 
+        "circle_classification": {
+          "accepted": true, 
+          "avg_corner_radius_px": 79.75, 
+          "bbox_center_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }, 
+          "corner_circles": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 933.5, 
+              "y_px": 365.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1133.5, 
+              "y_px": 545.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 952.5, 
+              "y_px": 743.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 752.5, 
+              "y_px": 563.5
+            }
+          ], 
+          "corner_count": 4, 
+          "corner_radii_px": [
+            79.0, 
+            80.0, 
+            80.0, 
+            80.0
+          ], 
+          "corner_radius_rms_px": 0.4330127018922193, 
+          "corner_side_lengths_px": [
+            269.0724809414742, 
+            268.26293072282647, 
+            269.0724809414742, 
+            268.26293072282647
+          ], 
+          "corner_side_rms_px": 0.4047751093238787, 
+          "mean_bbox_center_delta_px": 0.0, 
+          "mean_center_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }, 
+          "orientation_corner_ratio": 0.5768025078369906, 
+          "orientation_count": 1, 
+          "orientation_point": {
+            "radius_px": 46.0, 
+            "x_px": 1123.5, 
+            "y_px": 356.5
+          }, 
+          "orientation_points": [
+            {
+              "radius_px": 46.0, 
+              "x_px": 1123.5, 
+              "y_px": 356.5
+            }
+          ], 
+          "orientation_radius_px": 46.0, 
+          "raw_count": 5, 
+          "reason": "ok", 
+          "selected_corners": [
+            {
+              "radius_px": 80.0, 
+              "x_px": 933.5, 
+              "y_px": 365.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 1133.5, 
+              "y_px": 545.5
+            }, 
+            {
+              "radius_px": 80.0, 
+              "x_px": 952.5, 
+              "y_px": 743.5
+            }, 
+            {
+              "radius_px": 79.0, 
+              "x_px": 752.5, 
+              "y_px": 563.5
+            }
+          ]
+        }, 
+        "circle_geometry_diagnostic": {
+          "available": true, 
+          "bbox_center_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }, 
+          "center_consistency_rms_px": 0.0, 
+          "diagonal_intersection_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }, 
+          "mean_center_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }, 
+          "pose_center_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }
+        }, 
+        "command_angle_deg": -45.0, 
+        "commanded_nozzle_rotation_deg": -45.0, 
+        "cycle_index": 1, 
+        "error_mag_mm": 0.6373159480262997, 
+        "error_x_mm": -0.18820339596442182, 
+        "error_y_mm": -0.608893339884844, 
+        "image_frame_diagnostics": {
+          "capture_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "frame_size_source": "pipeline_working_image", 
+          "pipeline_working_image_size": {
+            "height": 999, 
+            "width": 1920
+          }, 
+          "pose_coordinate_frame_size": {
+            "height": 999, 
+            "width": 1920
+          }
+        }, 
+        "label": "round_object_nozzle_axis", 
+        "measured_after_place_center_x_mm": 306.59579660403557, 
+        "measured_after_place_center_y_mm": 358.76410666011515, 
+        "measurement_coordinate_frame": "camera_only", 
+        "nominal_place_center_x_mm": 306.784, 
+        "nominal_place_center_y_mm": 359.373, 
+        "normalized_sample_angle_deg": -45.0, 
+        "nozzle_target_coordinate_frame": "tool_aware", 
+        "pick_rotation_deg": -90.0, 
+        "pixel_transform_diagnostic": {
+          "available": true, 
+          "camera_only": {
+            "rotation": 0.0, 
+            "x": 306.59579660403557, 
+            "y": 358.76410666011515, 
+            "z": 5.0
+          }, 
+          "center_px": {
+            "x": 943.0, 
+            "y": 554.5
+          }, 
+          "image_frame_diagnostics": {
+            "capture_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "frame_size_source": "pipeline_working_image", 
+            "pipeline_working_image_size": {
+              "height": 999, 
+              "width": 1920
+            }, 
+            "pose_coordinate_frame_size": {
+              "height": 999, 
+              "width": 1920
+            }
+          }, 
+          "measurement_method": "camera_only", 
+          "nozzle_target_method": "tool_aware", 
+          "tool_aware": {
+            "rotation": 0.0, 
+            "x": 306.59579660403557, 
+            "y": 358.76410666011515, 
+            "z": 5.0
+          }, 
+          "tool_minus_camera_only": {
+            "dx": 0.0, 
+            "dy": 0.0, 
+            "mag": 0.0
+          }, 
+          "tool_minus_camera_only_mag_mm": 0.0
+        }, 
+        "place_rotation_deg": -45.0, 
+        "raw_sample_error_warning": false, 
+        "requested_sample_angle_deg": -45.0, 
+        "sample_index": 15, 
+        "sample_rejected_reason": null, 
+        "sample_valid": true, 
+        "selected_pixel_to_machine_transform_method": "camera_only"
+      }
+    ]
+  }, 
+  "verification_passed": false
+}

@@ -54,11 +54,85 @@ if SCRIPT_DIR not in sys.path:
 if HOMING_DIR not in sys.path:
     sys.path.append(HOMING_DIR)
 
-RUNTIME_PATH = os.path.join(HOMING_DIR, "pick_cameraAlign_Calibration.py")
+FOUR_CIRCLE_SCRIPT = "pick_cameraAlign_Calibration.py"
+SINGLE_CIRCLE_SCRIPT = "pick_cameraAlign_SingleCircleTipCalibration.py"
+FOUR_CIRCLE_RUNTIME_PATH = os.path.join(HOMING_DIR, FOUR_CIRCLE_SCRIPT)
+SINGLE_CIRCLE_RUNTIME_PATH = os.path.join(HOMING_DIR, SINGLE_CIRCLE_SCRIPT)
+GUI_CONFIG_FILE = "Calibration_GUI_config.json"
+GUI_CONFIG_PATH = os.path.join(HOMING_DIR, GUI_CONFIG_FILE)
+CALIBRATION_OBJECT_TYPES = {
+    "four_circle": {
+        "label": "Four-circle square die",
+        "script": FOUR_CIRCLE_SCRIPT,
+        "path": FOUR_CIRCLE_RUNTIME_PATH,
+        "module": "pick_cameraAlign_Calibration"
+    },
+    "single_circle": {
+        "label": "Single-circle OpenPnP-style die",
+        "script": SINGLE_CIRCLE_SCRIPT,
+        "path": SINGLE_CIRCLE_RUNTIME_PATH,
+        "module": "pick_cameraAlign_SingleCircleTipCalibration"
+    }
+}
+
+
+def normalize_calibration_object_type(value):
+    text = str(value or "four_circle")
+    if text in CALIBRATION_OBJECT_TYPES:
+        return text
+    for key in CALIBRATION_OBJECT_TYPES.keys():
+        if CALIBRATION_OBJECT_TYPES[key]["label"] == text:
+            return key
+    return "four_circle"
+
+
+def calibration_object_label(value):
+    key = normalize_calibration_object_type(value)
+    return CALIBRATION_OBJECT_TYPES[key]["label"]
+
+
+def calibration_object_type_from_label(label):
+    return normalize_calibration_object_type(label)
+
+
+def load_gui_config():
+    data = {"calibration_object_type": "four_circle"}
+    if os.path.exists(GUI_CONFIG_PATH):
+        try:
+            f = open(GUI_CONFIG_PATH, "r")
+            try:
+                loaded = json.loads(f.read())
+            finally:
+                f.close()
+            data.update(loaded)
+        except:
+            pass
+    data["calibration_object_type"] = normalize_calibration_object_type(data.get("calibration_object_type", "four_circle"))
+    return data
+
+
+def save_gui_config(data):
+    clean = {"calibration_object_type": normalize_calibration_object_type(data.get("calibration_object_type", "four_circle"))}
+    f = open(GUI_CONFIG_PATH, "w")
+    try:
+        f.write(json.dumps(clean, sort_keys=True, indent=2))
+    finally:
+        f.close()
+
+
+def load_runtime_for_type(calibration_object_type):
+    key = normalize_calibration_object_type(calibration_object_type)
+    info = CALIBRATION_OBJECT_TYPES[key]
+    return imp.load_source(info["module"], info["path"])
+
+
+def script_file_for_type(calibration_object_type):
+    key = normalize_calibration_object_type(calibration_object_type)
+    return CALIBRATION_OBJECT_TYPES[key]["script"]
 
 
 def load_runtime():
-    return imp.load_source("pick_cameraAlign_Calibration", RUNTIME_PATH)
+    return load_runtime_for_type("four_circle")
 
 
 runtime = load_runtime()
@@ -200,6 +274,17 @@ def panel_title(text):
 
 OVERLAY_NUMERIC_KEYS = ["square_width", "circle_width", "circle_radius", "cross_size", "key_scale"]
 OVERLAY_COLOR_KEYS = ["actual_color", "expected_color", "circle_color", "orientation_color"]
+DEFAULT_OVERLAY_STYLE = {
+    "square_width": 2.0,
+    "circle_width": 2.0,
+    "circle_radius": 14.0,
+    "cross_size": 18.0,
+    "key_scale": 0.8,
+    "actual_color": "#24B35F",
+    "expected_color": "#FFB020",
+    "circle_color": "#2A8CFF",
+    "orientation_color": "#F04C4C"
+}
 
 
 class CancelToken(object):
@@ -216,6 +301,12 @@ class CancelToken(object):
 class CalibrationGui(object):
     def __init__(self):
         self.frame = JFrame("Pick Camera Align Calibration")
+        self.gui_config = load_gui_config()
+        self.calibration_object_type = normalize_calibration_object_type(
+            self.gui_config.get("calibration_object_type", "four_circle"))
+        self.runtime = load_runtime_for_type(self.calibration_object_type)
+        global runtime
+        runtime = self.runtime
         self.cfg = runtime.load_config()
         self.fields = {}
         self.loc_fields = {}
@@ -231,11 +322,23 @@ class CalibrationGui(object):
         self.last_camera_image = None
         self.last_overlay = None
         self.last_result = None
+        self.apply_preview = None
         self.worker = None
         self.cancel_token = None
         self.is_running = False
         self.move_buttons = []
         self.busy_buttons = []
+
+    def select_runtime(self, calibration_object_type, load_cfg):
+        global runtime
+        self.calibration_object_type = normalize_calibration_object_type(calibration_object_type)
+        self.runtime = load_runtime_for_type(self.calibration_object_type)
+        runtime = self.runtime
+        self.gui_config["calibration_object_type"] = self.calibration_object_type
+        save_gui_config(self.gui_config)
+        if bool(load_cfg):
+            self.cfg = runtime.load_config()
+        return self.runtime
 
     def build(self):
         self.frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
@@ -272,12 +375,19 @@ class CalibrationGui(object):
         self.part_combo = JComboBox(part_labels())
         self.nozzle_combo = JComboBox(nozzle_names())
         self.camera_combo = JComboBox(camera_names())
+        self.object_type_combo = JComboBox([
+            CALIBRATION_OBJECT_TYPES["four_circle"]["label"],
+            CALIBRATION_OBJECT_TYPES["single_circle"]["label"]
+        ])
+        select_combo_item(self.object_type_combo, calibration_object_label(self.calibration_object_type))
+        self.object_type_combo.addActionListener(lambda event: self.change_calibration_object_type())
         self.part_combo.addActionListener(lambda event: self.update_safety_ui())
 
         selectors = self.section_panel("Configuration")
-        self.add_row(selectors, 0, "Part", self.part_combo)
-        self.add_row(selectors, 1, "Nozzle", self.nozzle_combo)
-        self.add_row(selectors, 2, "Top Camera", self.camera_combo)
+        self.add_row(selectors, 0, "Calibration Object Type", self.object_type_combo)
+        self.add_row(selectors, 1, "Part", self.part_combo)
+        self.add_row(selectors, 2, "Nozzle", self.nozzle_combo)
+        self.add_row(selectors, 3, "Top Camera", self.camera_combo)
         self.cap_section_width(selectors, 430)
         outer.add(selectors)
         outer.add(Box.createVerticalStrut(8))
@@ -422,6 +532,21 @@ class CalibrationGui(object):
         self.safety_body.setVisible(self.safety_toggle.isSelected())
         self.frame.pack()
 
+    def change_calibration_object_type(self):
+        try:
+            selected = calibration_object_type_from_label(self.object_type_combo.getSelectedItem())
+            if selected == self.calibration_object_type:
+                return
+            self.select_runtime(selected, True)
+            self.load_into_ui(self.cfg)
+            self.last_result = None
+            self.apply_preview = None
+            self.update_results(None)
+            self.append_log("GUI][Mode", "selected_calibration_object_type=%s" % selected)
+            self.append_log("GUI][Mode", "dispatch_script=%s" % script_file_for_type(selected))
+        except Exception, e:
+            self.show_error("Mode change failed", e)
+
     def section_panel(self, title):
         panel = JPanel(GridBagLayout())
         panel.setBorder(BorderFactory.createCompoundBorder(
@@ -507,14 +632,14 @@ class CalibrationGui(object):
         return panel
 
     def build_right_panel(self):
-        right = JPanel()
-        right.setLayout(BoxLayout(right, BoxLayout.Y_AXIS))
+        right = JPanel(BorderLayout(0, 0))
 
         cam_panel = JPanel(BorderLayout(6, 6))
         cam_panel.setBorder(BorderFactory.createTitledBorder("Last Captured Vision Image"))
         self.camera_image.setHorizontalAlignment(JLabel.CENTER)
-        self.camera_image.setPreferredSize(Dimension(500, 280))
-        cam_panel.add(JScrollPane(self.camera_image), BorderLayout.CENTER)
+        self.camera_image.setPreferredSize(Dimension(520, 420))
+        cam_panel.setMinimumSize(Dimension(420, 260))
+        cam_panel.add(self.camera_image, BorderLayout.CENTER)
         cam_bar = JPanel(BorderLayout(6, 0))
         refresh_btn = JButton("Capture")
         refresh_btn.addActionListener(lambda event: self.refresh_camera(True))
@@ -523,16 +648,17 @@ class CalibrationGui(object):
         cam_controls.add(refresh_btn)
         cam_bar.add(cam_controls, BorderLayout.EAST)
         cam_panel.add(cam_bar, BorderLayout.SOUTH)
-        right.add(cam_panel)
-        right.add(Box.createVerticalStrut(8))
 
         exec_panel = JPanel(BorderLayout(8, 8))
         exec_panel.setBorder(BorderFactory.createTitledBorder("Calibration Execution"))
+        exec_panel.setMinimumSize(Dimension(420, 170))
+        exec_panel.setPreferredSize(Dimension(520, 260))
         buttons = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0))
-        self.run_btn = JButton("Run Calibration (Dry Run)")
+        self.run_btn = JButton("Run Calibration")
         self.test_storage_btn = JButton("Test Storage Vision Lock")
         self.test_cal_btn = JButton("Test Cal Vision Lock")
-        self.apply_btn = JButton("Apply Offsets to Machine")
+        self.apply_btn = JButton("Apply Saved Calibration")
+        self.apply_btn.setToolTipText("Applies the saved verified calibration result; does not run calibration.")
         self.confirm_no_shift_btn = JButton("Show No Shift")
         self.confirm_shift_btn = JButton("Show Shift")
         self.abort_btn = JButton("Abort")
@@ -558,25 +684,32 @@ class CalibrationGui(object):
                              self.apply_btn, self.confirm_no_shift_btn,
                              self.confirm_shift_btn] + self.move_buttons
         exec_panel.add(buttons, BorderLayout.NORTH)
-        exec_panel.add(self.build_results_panel(), BorderLayout.CENTER)
+        results_scroll = JScrollPane(self.build_results_panel())
+        results_scroll.setPreferredSize(Dimension(500, 150))
+        results_scroll.setMinimumSize(Dimension(360, 100))
+        exec_panel.add(results_scroll, BorderLayout.CENTER)
         confirm_panel = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0))
         confirm_panel.setBorder(BorderFactory.createTitledBorder("Confirm"))
         confirm_panel.add(self.confirm_no_shift_btn)
         confirm_panel.add(self.confirm_shift_btn)
         exec_panel.add(confirm_panel, BorderLayout.SOUTH)
-        right.add(exec_panel)
-        right.add(Box.createVerticalGlue())
+
+        split = JSplitPane(JSplitPane.VERTICAL_SPLIT, cam_panel, exec_panel)
+        split.setResizeWeight(0.78)
+        split.setDividerLocation(520)
+        split.setOneTouchExpandable(True)
+        right.add(split, BorderLayout.CENTER)
         return right
 
     def build_overlay_style_panel(self):
         panel = JPanel(GridBagLayout())
         panel.setBorder(BorderFactory.createTitledBorder("Overlay Style"))
         specs = [
-            ("square_width", "Square line", "8"),
-            ("circle_width", "Circle line", "6"),
+            ("square_width", "Square line", "2"),
+            ("circle_width", "Circle line", "2"),
             ("circle_radius", "Fallback circle radius", "14"),
             ("cross_size", "Center cross", "18"),
-            ("key_scale", "Key size", "1.4"),
+            ("key_scale", "Key size", "0.8"),
             ("actual_color", "Actual color", "#24B35F"),
             ("expected_color", "Expected color", "#FFB020"),
             ("circle_color", "Circle color", "#2A8CFF"),
@@ -596,11 +729,22 @@ class CalibrationGui(object):
     def build_results_panel(self):
         panel = JPanel(GridBagLayout())
         specs = [
-            ("delta_x", "Delta X", "mm"),
-            ("delta_y", "Delta Y", "mm"),
+            ("delta_x", "Measured error X", "mm"),
+            ("delta_y", "Measured error Y", "mm"),
             ("delta_theta", "Delta theta", "deg"),
+            ("runout_radius", "Runout radius", "mm"),
+            ("runout_center_x", "Runout center X", "mm"),
+            ("runout_center_y", "Runout center Y", "mm"),
+            ("runout_phase", "Runout phase", "deg"),
+            ("apply_delta_x", "Nozzle offset dX", "mm"),
+            ("apply_delta_y", "Nozzle offset dY", "mm"),
+            ("old_offset_x", "Old nozzle offset X", "mm"),
+            ("old_offset_y", "Old nozzle offset Y", "mm"),
+            ("new_offset_x", "Preview nozzle offset X", "mm"),
+            ("new_offset_y", "Preview nozzle offset Y", "mm"),
             ("confidence", "Repeatability RMS", "mm"),
             ("verify", "Verification", ""),
+            ("apply_status", "Apply", ""),
             ("circle_count", "Circle count", ""),
             ("center_x", "Center X error", "mm"),
             ("center_y", "Center Y error", "mm"),
@@ -628,14 +772,22 @@ class CalibrationGui(object):
         select_combo_item(self.part_combo, cfg.get("part_id_or_name", ""))
         select_combo_item(self.nozzle_combo, cfg.get("nozzle_name", ""))
         select_combo_item(self.camera_combo, cfg.get("camera_name", ""))
+        ui_defaults = {
+            "test_iterations": 1,
+            "verification_iterations": 1,
+            "max_retries_per_step": 3,
+            "max_pick_descent_mm": 2.0,
+            "z_clearance_before_pick_mm": 0.0,
+            "cal_camera_z_offset": 0.0
+        }
         for key in ["safe_travel_z", "test_iterations",
                     "verification_iterations", "max_retries_per_step", "circle_detection_min_count"]:
-            self.fields[key].setText(str(cfg.get(key, "")))
+            self.fields[key].setText(str(cfg.get(key, runtime.DEFAULT_CONFIG.get(key, ui_defaults.get(key, "")))))
         self.require_visual_lock.setSelected(bool(cfg.get("require_visual_lock_before_pick", True)))
         self.verify_lock_after_centering.setSelected(bool(cfg.get("verify_lock_after_centering", True)))
         for key in ["max_pick_descent_mm", "z_clearance_before_pick_mm",
                     "cal_camera_z_offset"]:
-            self.fields[key].setText(str(cfg.get(key, runtime.DEFAULT_CONFIG.get(key, ""))))
+            self.fields[key].setText(str(cfg.get(key, runtime.DEFAULT_CONFIG.get(key, ui_defaults.get(key, "")))))
         spiral = cfg.get("spiral_search", {})
         self.spiral_enabled.setSelected(bool(spiral.get("enabled", True)))
         for key in ["start_radius_mm", "radius_step_mm", "max_radius_mm", "angle_step_deg", "settle_ms"]:
@@ -647,7 +799,7 @@ class CalibrationGui(object):
         self.update_safety_ui()
 
     def load_overlay_style(self, style):
-        defaults = runtime.DEFAULT_CONFIG.get("overlay_style", {})
+        defaults = DEFAULT_OVERLAY_STYLE
         merged = dict(defaults)
         try:
             merged.update(style)
@@ -682,18 +834,24 @@ class CalibrationGui(object):
         for deprecated_key in ["storage_base_z_mm", "part_height_z_mm"]:
             if deprecated_key in cfg:
                 del cfg[deprecated_key]
-        cfg["require_visual_lock_before_pick"] = self.require_visual_lock.isSelected()
-        cfg["verify_lock_after_centering"] = self.verify_lock_after_centering.isSelected()
-        cfg["max_pick_descent_mm"] = float(self.fields["max_pick_descent_mm"].getText().strip())
-        cfg["z_clearance_before_pick_mm"] = float(self.fields["z_clearance_before_pick_mm"].getText().strip())
-        cfg["cal_camera_z_offset"] = float(self.fields["cal_camera_z_offset"].getText().strip())
+        for key, value in [
+            ("require_visual_lock_before_pick", self.require_visual_lock.isSelected()),
+            ("verify_lock_after_centering", self.verify_lock_after_centering.isSelected()),
+            ("max_pick_descent_mm", float(self.fields["max_pick_descent_mm"].getText().strip())),
+            ("z_clearance_before_pick_mm", float(self.fields["z_clearance_before_pick_mm"].getText().strip())),
+            ("cal_camera_z_offset", float(self.fields["cal_camera_z_offset"].getText().strip()))
+        ]:
+            if key in cfg:
+                cfg[key] = value
         for key in ["test_iterations", "verification_iterations", "max_retries_per_step", "circle_detection_min_count"]:
-            cfg[key] = int(float(self.fields[key].getText().strip()))
-        cfg["spiral_search"] = dict(cfg.get("spiral_search", {}))
-        cfg["spiral_search"]["enabled"] = self.spiral_enabled.isSelected()
-        for key in ["start_radius_mm", "radius_step_mm", "max_radius_mm", "angle_step_deg"]:
-            cfg["spiral_search"][key] = float(self.fields["spiral_search.%s" % key].getText().strip())
-        cfg["spiral_search"]["settle_ms"] = int(float(self.fields["spiral_search.settle_ms"].getText().strip()))
+            if key in cfg:
+                cfg[key] = int(float(self.fields[key].getText().strip()))
+        if "spiral_search" in cfg:
+            cfg["spiral_search"] = dict(cfg.get("spiral_search", {}))
+            cfg["spiral_search"]["enabled"] = self.spiral_enabled.isSelected()
+            for key in ["start_radius_mm", "radius_step_mm", "max_radius_mm", "angle_step_deg"]:
+                cfg["spiral_search"][key] = float(self.fields["spiral_search.%s" % key].getText().strip())
+            cfg["spiral_search"]["settle_ms"] = int(float(self.fields["spiral_search.settle_ms"].getText().strip()))
         cfg["die_storage_location_xyz"] = self.location_from_fields("die_storage_location_xyz")
         if "die_storage_end_location_xyz" in cfg:
             del cfg["die_storage_end_location_xyz"]
@@ -706,7 +864,7 @@ class CalibrationGui(object):
         return cfg
 
     def overlay_style_from_fields(self):
-        style = dict(runtime.DEFAULT_CONFIG.get("overlay_style", {}))
+        style = dict(DEFAULT_OVERLAY_STYLE)
         for key in OVERLAY_NUMERIC_KEYS:
             field = self.overlay_fields.get(key)
             if field is not None:
@@ -731,15 +889,16 @@ class CalibrationGui(object):
         return runtime.infer_part_height_mm(part)
 
     def apply_derived_runtime_fields(self, cfg):
-        cfg["_storage_base_z_mm"] = float(cfg.get("die_storage_location_xyz", {}).get("z", 0.0))
-        cfg["_part_height_z_mm"] = self.selected_part_height_mm()
+        if self.calibration_object_type != "single_circle":
+            cfg["_storage_base_z_mm"] = float(cfg.get("die_storage_location_xyz", {}).get("z", 0.0))
+            cfg["_part_height_z_mm"] = self.selected_part_height_mm()
         return cfg
 
     def validate_gui_config(self, cfg):
         errors = []
-        if float(cfg["max_pick_descent_mm"]) <= 0.0:
+        if "max_pick_descent_mm" in cfg and float(cfg["max_pick_descent_mm"]) <= 0.0:
             errors.append("Max pick descent must be greater than 0.")
-        if float(cfg["z_clearance_before_pick_mm"]) < 0.0:
+        if "z_clearance_before_pick_mm" in cfg and float(cfg["z_clearance_before_pick_mm"]) < 0.0:
             errors.append("Z clearance before pick must be 0 or greater.")
         storage_surface_z = runtime.storage_pick_surface_z_mm(cfg)
         cal_surface_z = runtime.pick_surface_z_mm(runtime.loc_from_xyz(cfg["cal_work_location_xyz"]), cfg)
@@ -751,11 +910,11 @@ class CalibrationGui(object):
             errors.append("Safe travel Z must be above Die Storage Z.")
         if float(cfg["safe_travel_z"]) <= float(cfg["cal_work_location_xyz"]["z"]):
             errors.append("Safe travel Z must be above Calibration Work Z.")
-        if int(cfg["circle_detection_min_count"]) != 4:
+        if "circle_detection_min_count" in cfg and int(cfg["circle_detection_min_count"]) != 4:
             errors.append("Circle detection minimum count must be 4.")
-        if int(cfg["test_iterations"]) < 1:
+        if "test_iterations" in cfg and int(cfg["test_iterations"]) < 1:
             errors.append("Test iterations must be at least 1.")
-        if int(cfg["verification_iterations"]) < 1:
+        if "verification_iterations" in cfg and int(cfg["verification_iterations"]) < 1:
             errors.append("Verification iterations must be at least 1.")
         style = cfg.get("overlay_style", {})
         for key in OVERLAY_NUMERIC_KEYS:
@@ -826,8 +985,10 @@ class CalibrationGui(object):
     def collect_config_no_validate(self):
         cfg = runtime.deep_update(runtime.DEFAULT_CONFIG, self.cfg)
         cfg["safe_travel_z"] = float(self.fields["safe_travel_z"].getText().strip())
-        cfg["require_visual_lock_before_pick"] = self.require_visual_lock.isSelected()
-        cfg["max_pick_descent_mm"] = float(self.fields["max_pick_descent_mm"].getText().strip())
+        if "require_visual_lock_before_pick" in cfg:
+            cfg["require_visual_lock_before_pick"] = self.require_visual_lock.isSelected()
+        if "max_pick_descent_mm" in cfg:
+            cfg["max_pick_descent_mm"] = float(self.fields["max_pick_descent_mm"].getText().strip())
         cfg["die_storage_location_xyz"] = self.location_from_fields("die_storage_location_xyz")
         cfg["cal_work_location_xyz"] = self.location_from_fields("cal_work_location_xyz")
         cfg["overlay_style"] = self.overlay_style_from_fields()
@@ -906,17 +1067,25 @@ class CalibrationGui(object):
         except:
             overlay = None
         if overlay is None:
+            self.update_overlay_from_latest_file()
             return
+        overlay = self.normalize_overlay(overlay)
         path = overlay.get("image_path", None)
         if path is None or not os.path.exists(path):
             return
         try:
+            try:
+                ImageIO.setUseCache(False)
+            except:
+                pass
             image = ImageIO.read(File(path))
             self.last_camera_image = image
             self.last_overlay = overlay
             painted = self.overlay_image(image, overlay)
             self.camera_image.setText("")
             self.camera_image.setIcon(ImageIcon(self.scaled_camera_image(painted)))
+            self.camera_image.revalidate()
+            self.camera_image.repaint()
             self.camera_status.setText("Last captured vision frame %s" % time.strftime("%H:%M:%S"))
         except Exception, e:
             self.camera_status.setText("Overlay failed: %s" % e)
@@ -941,6 +1110,79 @@ class CalibrationGui(object):
     def redraw_last_overlay(self):
         if self.last_overlay is not None:
             self.update_overlay_from_result({"overlay": self.last_overlay})
+
+    def normalize_overlay_point(self, point):
+        if point is None:
+            return None
+        out = {}
+        try:
+            if point.get("x", None) is not None:
+                out["x"] = float(point.get("x"))
+            elif point.get("x_px", None) is not None:
+                out["x"] = float(point.get("x_px"))
+            if point.get("y", None) is not None:
+                out["y"] = float(point.get("y"))
+            elif point.get("y_px", None) is not None:
+                out["y"] = float(point.get("y_px"))
+            if point.get("radius", None) is not None:
+                out["radius"] = float(point.get("radius"))
+            elif point.get("radius_px", None) is not None:
+                out["radius"] = float(point.get("radius_px"))
+        except:
+            return None
+        if "x" not in out or "y" not in out:
+            return None
+        return out
+
+    def normalize_overlay_points(self, points):
+        out = []
+        if points is None:
+            return out
+        for point in points:
+            normalized = self.normalize_overlay_point(point)
+            if normalized is not None:
+                out.append(normalized)
+        return out
+
+    def normalize_overlay(self, overlay):
+        try:
+            normalized = dict(overlay)
+        except:
+            normalized = overlay
+        actual = self.normalize_overlay_points(normalized.get("actual_corners_px", None))
+        if len(actual) == 0:
+            actual = self.normalize_overlay_points(normalized.get("selected_corners_px", None))
+        if len(actual) > 0:
+            normalized["actual_corners_px"] = actual
+        circles = self.normalize_overlay_points(normalized.get("detected_circles_px", None))
+        if len(circles) == 0:
+            circles = actual
+        normalized["detected_circles_px"] = circles
+
+        actual_center = self.normalize_overlay_point(normalized.get("actual_center_px", None))
+        if actual_center is None:
+            actual_center = self.normalize_overlay_point(normalized.get("pose_center_px", None))
+        if actual_center is None:
+            actual_center = self.normalize_overlay_point(normalized.get("center_circle_px", None))
+        if actual_center is not None:
+            normalized["actual_center_px"] = actual_center
+
+        expected_center = self.normalize_overlay_point(normalized.get("expected_center_px", None))
+        if expected_center is not None:
+            normalized["expected_center_px"] = expected_center
+
+        orientation = self.normalize_overlay_point(normalized.get("orientation_circle_px", None))
+        if orientation is None:
+            orientation = self.normalize_overlay_point(normalized.get("orientation_px", None))
+        if orientation is not None:
+            normalized["orientation_circle_px"] = orientation
+        if len(circles) == 0:
+            center_circle = self.normalize_overlay_point(normalized.get("center_circle_px", None))
+            if center_circle is not None:
+                normalized["detected_circles_px"] = [center_circle]
+                if orientation is not None:
+                    normalized["detected_circles_px"].append(orientation)
+        return normalized
 
     def overlay_float(self, key, default_value):
         try:
@@ -984,6 +1226,8 @@ class CalibrationGui(object):
             actual = overlay.get("actual_corners_px", [])
             actual_center = overlay.get("actual_center_px", None)
             expected_center = overlay.get("expected_center_px", None)
+            if expected_center is None:
+                expected_center = {"x": float(w) / 2.0, "y": float(h) / 2.0}
             preview_scale = self.preview_scale_for(image)
             if preview_scale <= 0.0:
                 preview_scale = 1.0
@@ -1095,7 +1339,9 @@ class CalibrationGui(object):
                 self.append_log(tag, msg)
                 if tag in ["Vision", "Spiral", "Compute", "Verify", "VisionLock"]:
                     self.camera_status.setText(msg)
-                if tag == "VisionLock" and "acquired" in str(msg).lower():
+                if tag == "VisionImage":
+                    self.update_overlay_from_latest_file()
+                elif tag == "VisionLock" and "acquired" in str(msg).lower():
                     self.update_overlay_from_latest_file()
         SwingUtilities.invokeLater(AppendLater())
 
@@ -1109,11 +1355,39 @@ class CalibrationGui(object):
             button.setEnabled(not running)
         self.abort_btn.setEnabled(running)
         has_result = self.last_result is not None and not self.last_result.get("error")
-        self.apply_btn.setEnabled((not running) and has_result)
+        can_apply = False
+        try:
+            can_apply = bool(self.apply_preview is not None and self.apply_preview.get("can_apply", False))
+        except:
+            can_apply = False
+        self.apply_btn.setEnabled((not running) and has_result and can_apply)
         self.confirm_no_shift_btn.setVisible(has_result)
         self.confirm_no_shift_btn.setEnabled((not running) and has_result)
         self.confirm_shift_btn.setVisible(has_result)
         self.confirm_shift_btn.setEnabled((not running) and has_result)
+
+    def refresh_apply_preview(self):
+        self.apply_preview = None
+        try:
+            if self.last_result is None or self.last_result.get("error"):
+                return None
+            rt = self.runtime_for_result(self.last_result)
+            self.apply_preview = rt.get_last_result_apply_preview()
+        except Exception, e:
+            self.apply_preview = {"can_apply": False, "reason": str(e)}
+        return self.apply_preview
+
+    def runtime_for_result(self, result):
+        try:
+            model = result.get("script_model", None)
+            if model is None:
+                computed = result.get("computed", {}) or {}
+                model = computed.get("script_model", None)
+            if model == "single_circle":
+                return load_runtime_for_type("single_circle")
+        except:
+            pass
+        return load_runtime_for_type("four_circle")
 
     def run_dry(self):
         try:
@@ -1129,6 +1403,10 @@ class CalibrationGui(object):
             return
 
         self.log_area.setText("")
+        selected_type = self.calibration_object_type
+        dispatch_script = script_file_for_type(selected_type)
+        self.append_log("GUI][Run", "selected_calibration_object_type=%s" % selected_type)
+        self.append_log("GUI][Run", "dispatch_script=%s" % dispatch_script)
         self.append_log("GUI][Run", "Starting dry-run calibration")
         self.last_result = None
         self.update_results(None)
@@ -1139,7 +1417,7 @@ class CalibrationGui(object):
 
         class DryRunWorker(SwingWorker):
             def doInBackground(worker_self):
-                rt = load_runtime()
+                rt = load_runtime_for_type(selected_type)
                 class MachineTask(Callable):
                     def call(task_self):
                         return rt.run(apply_offsets=False, progress_callback=gui_self.progress_callback,
@@ -1149,6 +1427,9 @@ class CalibrationGui(object):
             def done(worker_self):
                 try:
                     result = worker_self.get()
+                    if result is not None and isinstance(result, dict):
+                        result["script_model"] = selected_type
+                        result["script_file"] = dispatch_script
                     gui_self.last_result = result
                     gui_self.update_results(result)
                     gui_self.update_overlay_from_result(result)
@@ -1183,7 +1464,7 @@ class CalibrationGui(object):
 
         class VisionTestWorker(SwingWorker):
             def doInBackground(worker_self):
-                rt = load_runtime()
+                rt = load_runtime_for_type(gui_self.calibration_object_type)
                 class MachineTask(Callable):
                     def call(task_self):
                         return rt.test_vision_lock(location_key, progress_callback=gui_self.progress_callback,
@@ -1225,7 +1506,7 @@ class CalibrationGui(object):
 
         class MoveToolWorker(SwingWorker):
             def doInBackground(worker_self):
-                rt = load_runtime()
+                rt = load_runtime_for_type(gui_self.calibration_object_type)
                 class MachineTask(Callable):
                     def call(task_self):
                         return rt.move_tool_over_location(location_key, tool_kind,
@@ -1270,7 +1551,7 @@ class CalibrationGui(object):
 
         class ConfirmShiftWorker(SwingWorker):
             def doInBackground(worker_self):
-                rt = load_runtime()
+                rt = gui_self.runtime_for_result(gui_self.last_result)
                 class MachineTask(Callable):
                     def call(task_self):
                         return rt.confirm_shift(gui_self.last_result, bool(show_shift),
@@ -1302,9 +1583,34 @@ class CalibrationGui(object):
     def apply_offsets(self):
         if self.last_result is None:
             return
+        preview = self.refresh_apply_preview()
+        if preview is None or not bool(preview.get("can_apply", False)):
+            reason = "No apply preview is available."
+            if preview is not None:
+                reason = str(preview.get("reason", reason))
+            self.show_error("Apply blocked", reason)
+            self.set_running(False)
+            return
+        message = (
+            "Apply saved round-object nozzle-axis correction?\n\n"
+            "Measured bias: X=%s mm  Y=%s mm\n"
+            "Nozzle offset delta: X=%s mm  Y=%s mm\n"
+            "Old nozzle offset: X=%s mm  Y=%s mm\n"
+            "Preview new nozzle offset: X=%s mm  Y=%s mm\n\n"
+            "Runout is diagnostic only and will not be written."
+        ) % (
+            preview.get("measured_error_x_mm", ""),
+            preview.get("measured_error_y_mm", ""),
+            preview.get("delta_x_mm", ""),
+            preview.get("delta_y_mm", ""),
+            preview.get("old_nozzle_head_offset_x_mm", ""),
+            preview.get("old_nozzle_head_offset_y_mm", ""),
+            preview.get("preview_new_nozzle_head_offset_x_mm", ""),
+            preview.get("preview_new_nozzle_head_offset_y_mm", "")
+        )
         answer = JOptionPane.showConfirmDialog(
             self.frame,
-            "Apply the computed offsets to the machine configuration?",
+            message,
             "Confirm Apply",
             JOptionPane.YES_NO_OPTION
         )
@@ -1313,8 +1619,9 @@ class CalibrationGui(object):
         try:
             self.set_running(True)
             self.cancel_token = CancelToken()
-            result = runtime.apply_result(self.last_result, progress_callback=self.progress_callback,
-                                          cancel_token=self.cancel_token)
+            rt = self.runtime_for_result(self.last_result)
+            result = rt.apply_result(self.last_result, progress_callback=self.progress_callback,
+                                     cancel_token=self.cancel_token)
             self.last_result = result
             self.update_results(result)
             self.append_log("Apply", "Offsets applied")
@@ -1338,6 +1645,7 @@ class CalibrationGui(object):
         for key in self.result_fields.keys():
             self.result_fields[key].setText("")
         if result is None:
+            self.apply_preview = None
             if self.last_result is None:
                 self.confirm_no_shift_btn.setVisible(False)
                 self.confirm_no_shift_btn.setEnabled(False)
@@ -1345,6 +1653,7 @@ class CalibrationGui(object):
                 self.confirm_shift_btn.setEnabled(False)
             return
         if result.get("error"):
+            self.apply_preview = None
             self.result_fields["verify"].setText("ERROR")
             return
         if result.get("type") == "vision_lock":
@@ -1367,14 +1676,42 @@ class CalibrationGui(object):
             return
         computed = result.get("computed", {})
         verification = result.get("verification", {})
-        self.result_fields["delta_x"].setText("%.5f" % float(computed.get("offset_x_mm", 0.0)))
-        self.result_fields["delta_y"].setText("%.5f" % float(computed.get("offset_y_mm", 0.0)))
+        applied = result.get("applied", None)
+        preview = self.refresh_apply_preview()
+        self.result_fields["delta_x"].setText("%.5f" % float(computed.get("bias_x_mm", computed.get("measured_error_x_mm", 0.0))))
+        self.result_fields["delta_y"].setText("%.5f" % float(computed.get("bias_y_mm", computed.get("measured_error_y_mm", 0.0))))
         self.result_fields["delta_theta"].setText("%.5f" % float(computed.get("rotation_error_deg", 0.0)))
-        self.result_fields["confidence"].setText("%.5f" % float(computed.get("repeatability_rms_mm", 0.0)))
+        self.result_fields["runout_radius"].setText("%.5f" % float(computed.get("runout_radius_mm", 0.0)))
+        self.result_fields["runout_center_x"].setText("%.5f" % float(computed.get("runout_vector_x_mm", 0.0)))
+        self.result_fields["runout_center_y"].setText("%.5f" % float(computed.get("runout_vector_y_mm", 0.0)))
+        self.result_fields["runout_phase"].setText("%.5f" % float(computed.get("runout_phase_deg", 0.0)))
+        self.result_fields["apply_delta_x"].setText("%.5f" % float(computed.get("nozzle_head_offset_delta_x_mm", 0.0)))
+        self.result_fields["apply_delta_y"].setText("%.5f" % float(computed.get("nozzle_head_offset_delta_y_mm", 0.0)))
+        self.result_fields["old_offset_x"].setText("%.5f" % float(computed.get("old_nozzle_head_offset_x_mm", 0.0)))
+        self.result_fields["old_offset_y"].setText("%.5f" % float(computed.get("old_nozzle_head_offset_y_mm", 0.0)))
+        self.result_fields["new_offset_x"].setText("%.5f" % float(computed.get("preview_new_nozzle_head_offset_x_mm", 0.0)))
+        self.result_fields["new_offset_y"].setText("%.5f" % float(computed.get("preview_new_nozzle_head_offset_y_mm", 0.0)))
+        if isinstance(applied, dict):
+            self.result_fields["apply_delta_x"].setText("%.5f" % float(applied.get("delta_x_mm", 0.0)))
+            self.result_fields["apply_delta_y"].setText("%.5f" % float(applied.get("delta_y_mm", 0.0)))
+            self.result_fields["old_offset_x"].setText("%.5f" % float(applied.get("old_x_mm", 0.0)))
+            self.result_fields["old_offset_y"].setText("%.5f" % float(applied.get("old_y_mm", 0.0)))
+            self.result_fields["new_offset_x"].setText("%.5f" % float(applied.get("new_x_mm", 0.0)))
+            self.result_fields["new_offset_y"].setText("%.5f" % float(applied.get("new_y_mm", 0.0)))
+        self.result_fields["confidence"].setText("%.5f" % float(computed.get("rms_error_mm", 0.0)))
         max_apply = float(self.cfg.get("max_apply_mm", runtime.DEFAULT_CONFIG.get("max_apply_mm", 0.5)))
-        mag = float(verification.get("offset_mag_mm", computed.get("offset_mag_mm", 0.0)))
+        mag = float(verification.get("offset_mag_mm",
+                    computed.get("offset_mag_mm",
+                    computed.get("nozzle_head_offset_delta_mag_mm", 0.0))))
         verdict = "PASS" if mag <= max_apply else "CHECK"
         self.result_fields["verify"].setText("%s  mag=%.5f mm" % (verdict, mag))
+        if isinstance(applied, dict):
+            self.result_fields["apply_status"].setText("APPLIED")
+        elif preview is not None:
+            if bool(preview.get("can_apply", False)):
+                self.result_fields["apply_status"].setText("READY")
+            else:
+                self.result_fields["apply_status"].setText(str(preview.get("reason", "blocked")))
 
     def show_error(self, title, error):
         JOptionPane.showMessageDialog(self.frame, str(error), title, JOptionPane.ERROR_MESSAGE)

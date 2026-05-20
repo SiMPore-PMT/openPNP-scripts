@@ -1,0 +1,45 @@
+{
+  "angles_deg": [
+    -150.0, 
+    -90.0, 
+    -30.0, 
+    30.0, 
+    90.0, 
+    150.0
+  ], 
+  "blowoff_ms": 120, 
+  "bottom_square_stage": "squareResults", 
+  "bottom_square_zero_deg": 0.0, 
+  "calibration_location": {
+    "rotation": 0.0, 
+    "x": 306.8, 
+    "y": 359.0, 
+    "z": 3.0
+  }, 
+  "debug_image_path": "", 
+  "diameter_tolerance_px": 0.0, 
+  "expected_big_diameter_px": null, 
+  "expected_small_diameter_px": null, 
+  "focal_z_mm": null, 
+  "head_offset_sign": 1.0, 
+  "max_delta_xy_mm": 1.5, 
+  "max_square_error_deg": 5.0, 
+  "nozzle_name": "Pick Head", 
+  "part_height_mm": 1.0, 
+  "part_id": "Calibration_Square", 
+  "result_stage": "results", 
+  "search_radius_mm": 5.0, 
+  "search_step_mm": 1.0, 
+  "settle_ms": 250, 
+  "square_angle_sign": 1.0, 
+  "square_sample_step_mm": 0.25, 
+  "square_settle_ms": 250, 
+  "storage_location": {
+    "rotation": 0.0, 
+    "x": 330.0, 
+    "y": 396.8, 
+    "z": 3.0
+  }, 
+  "storage_zero_deg": 0.0, 
+  "vacuum_ms": 150
+}

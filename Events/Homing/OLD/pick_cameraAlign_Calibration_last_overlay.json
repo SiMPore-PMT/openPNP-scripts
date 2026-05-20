@@ -1,0 +1,102 @@
+{
+  "actual_center_px": {
+    "x": 949.0, 
+    "y": 594.25
+  }, 
+  "actual_corners_px": [
+    {
+      "radius": 79.0, 
+      "x": 816.5, 
+      "y": 458.5
+    }, 
+    {
+      "radius": 80.0, 
+      "x": 1086.5, 
+      "y": 462.5
+    }, 
+    {
+      "radius": 80.0, 
+      "x": 1081.5, 
+      "y": 730.5
+    }, 
+    {
+      "radius": 79.0, 
+      "x": 811.5, 
+      "y": 725.5
+    }
+  ], 
+  "center_source": "four_large_corner_circles_only", 
+  "context": "Storage", 
+  "detected_circles_px": [
+    {
+      "radius": 79.0, 
+      "x": 816.5, 
+      "y": 458.5
+    }, 
+    {
+      "radius": 80.0, 
+      "x": 1086.5, 
+      "y": 462.5
+    }, 
+    {
+      "radius": 80.0, 
+      "x": 1081.5, 
+      "y": 730.5
+    }, 
+    {
+      "radius": 79.0, 
+      "x": 811.5, 
+      "y": 725.5
+    }
+  ], 
+  "expected_center_px": {
+    "height": 999.0, 
+    "source": "pipeline_working_image", 
+    "width": 1920.0, 
+    "x": 959.5, 
+    "y": 499.0
+  }, 
+  "image_path": "/home/engineering-simpore/.openpnp2/scripts/Events/Homing/pick_cameraAlign_Calibration_last_capture.png", 
+  "machine_xy": {
+    "x": 329.87822133202303, 
+    "y": 396.35104283719835
+  }, 
+  "orientation_circle_px": {
+    "radius": 46.0, 
+    "x": 953.5, 
+    "y": 327.5
+  }, 
+  "orientation_dot_role": "rotation_only", 
+  "orientation_dot_used_for_center": false, 
+  "orientation_px": {
+    "x_px": 953.5, 
+    "y_px": 327.5
+  }, 
+  "pose_center_px": {
+    "x": 949.0, 
+    "y": 594.25
+  }, 
+  "selected_corners_px": [
+    {
+      "radius_px": 79.0, 
+      "x_px": 816.5, 
+      "y_px": 458.5
+    }, 
+    {
+      "radius_px": 80.0, 
+      "x_px": 1086.5, 
+      "y_px": 462.5
+    }, 
+    {
+      "radius_px": 80.0, 
+      "x_px": 1081.5, 
+      "y_px": 730.5
+    }, 
+    {
+      "radius_px": 79.0, 
+      "x_px": 811.5, 
+      "y_px": 725.5
+    }
+  ], 
+  "timestamp": 1779381995.242
+}
