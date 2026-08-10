@@ -2,13 +2,19 @@
 
 import imp
 import json
+import math
 import os
 import sys
 
-from java.awt import BorderLayout, Dimension, FlowLayout, GridBagConstraints, GridBagLayout, Insets, Image
+from java.awt import (
+    BasicStroke, BorderLayout, Color, Dimension, FlowLayout, GridBagConstraints,
+    Font, GridBagLayout, Insets, Image, RenderingHints
+)
+from java.awt.image import BufferedImage
 from java.io import File
-from java.lang import Runnable
+from java.lang import Runnable, Throwable
 from java.util.concurrent import Callable
+from java.util.concurrent.atomic import AtomicBoolean
 from javax.imageio import ImageIO
 from javax.swing import (
     BorderFactory, Box, BoxLayout, ImageIcon, JButton, JComboBox, JFrame, JLabel,
@@ -16,10 +22,11 @@ from javax.swing import (
     SwingUtilities, SwingWorker
 )
 from javax.swing.event import DocumentListener
+from org.openpnp.gui import MainFrame
 from org.openpnp.model import Configuration, LengthUnit, Location
 from org.openpnp.spi import Camera as SpiCamera
 from org.openpnp.spi.MotionPlanner import CompletionType
-from org.openpnp.util import MovableUtils
+from org.openpnp.util import MovableUtils, OpenCvUtils
 
 
 CONFIG_PATH = "/home/engineering-simpore/.openpnp2/scripts/lumen_calibration_gui_config.json"
@@ -47,6 +54,10 @@ REVERTED_HEAD_OFFSET_ONLY_RECAL_REQUIRED = "REVERTED_HEAD_OFFSET_ONLY_RECAL_REQU
 ERROR = "ERROR"
 
 
+class CalibrationAborted(Exception):
+    pass
+
+
 DEFAULT_CONFIG = {
     "nozzle_name": "",
     "part_id": "Calibration_Square",
@@ -56,11 +67,26 @@ DEFAULT_CONFIG = {
     "calibration_location": {"x": 306.7, "y": 359.0, "z": 3.0, "rotation": 0.0},
     "part_height_mm": 2.0,
     "use_openpnp_part_height": True,
+    "Z_EXTRA": 0.1,
+    "pick_z_extra_max_mm": 2.0,
+    "enable_pick_z_extra": False,
+    "actuator_settle_after_change_ms": 50,
+    "first_pick_extra_dwell_ms": 250,
+    "first_pick_extra_dwell_enabled": True,
     "artifact_pick_angle_sign": -1.0,
     "artifact_pick_angle_offset_deg": 0.0,
     "focal_z_mm": None,
     "search_radius_mm": 5.0,
     "search_step_mm": 1.0,
+    "artifact_search_mode": "radial",
+    "artifact_search_radius_mm": 5.0,
+    "artifact_search_step_mm": 1.0,
+    "artifact_search_angular_step_deg": 45.0,
+    "artifact_search_max_points": None,
+    "calibration_motion_speed": 1.0,
+    "pairwise_motion_speed": 0.60,
+    "normal_motion_speed": 1.0,
+    "held_die_motion_speed": 0.60,
     "angles_deg": [-150.0, -90.0, -30.0, 30.0, 90.0, 150.0],
     "bottom_square_zero_deg": 0.0,
     "head_offset_sign": 1.0,
@@ -69,9 +95,11 @@ DEFAULT_CONFIG = {
     "square_settle_ms": 250,
     "square_sample_step_mm": 0.25,
     "enable_true_nozzle_rotation_zero": True,
+    "run_builtin_nozzle_tip_calibration": True,
     "rotation_axis_name": "a",
     "zeroed_square_verify_max_error_deg": 0.75,
     "zeroed_square_verify_samples": True,
+    "force_fallback_dwell": False,
     "vacuum_ms": 150,
     "blowoff_ms": 120,
     "max_delta_xy_mm": 1.5,
@@ -151,12 +179,23 @@ def load_config_file():
         loaded = json.loads(f.read())
     finally:
         f.close()
+    if "calibration_motion_speed" not in loaded and "normal_motion_speed" in loaded:
+        loaded["calibration_motion_speed"] = loaded["normal_motion_speed"]
+    if "pairwise_motion_speed" not in loaded and "held_die_motion_speed" in loaded:
+        loaded["pairwise_motion_speed"] = loaded["held_die_motion_speed"]
+    if "Z_EXTRA" not in loaded:
+        if "z_extra" in loaded:
+            loaded["Z_EXTRA"] = loaded["z_extra"]
+        elif "pick_z_extra_mm" in loaded:
+            loaded["Z_EXTRA"] = loaded["pick_z_extra_mm"]
     return deep_merge(DEFAULT_CONFIG, loaded)
 
 
 def save_config_file(cfg):
     clean = {}
     for key in DEFAULT_CONFIG.keys():
+        if key in ["vacuum_ms", "blowoff_ms"] and cfg.get(key, DEFAULT_CONFIG[key]) == DEFAULT_CONFIG[key]:
+            continue
         clean[key] = cfg.get(key, DEFAULT_CONFIG[key])
     f = open(CONFIG_PATH, "w")
     try:
@@ -260,6 +299,94 @@ def get_down_camera(machine_obj=None):
     raise Exception("No top/down camera available")
 
 
+def object_name(obj):
+    if obj is None:
+        return ""
+    for name in ["getName", "getId"]:
+        try:
+            value = getattr(obj, name)()
+            if value is not None:
+                return str(value)
+        except:
+            pass
+    return str(obj)
+
+
+def all_cameras(machine_obj=None):
+    if machine_obj is None:
+        machine_obj = get_machine()
+    out = []
+    seen = {}
+
+    def add(camera):
+        if camera is None:
+            return
+        key = object_name(camera)
+        if key in seen:
+            return
+        seen[key] = True
+        out.append(camera)
+
+    try:
+        head = machine_obj.getDefaultHead()
+        for camera in java_items(head.getCameras()):
+            add(camera)
+    except:
+        pass
+    try:
+        for camera in java_items(machine_obj.getCameras()):
+            add(camera)
+    except:
+        pass
+    return out
+
+
+def get_camera_panel():
+    try:
+        return gui.getCameraViews()
+    except:
+        pass
+    try:
+        return MainFrame.get().getCameraViews()
+    except:
+        return None
+
+
+def reflected_field(obj, name):
+    try:
+        field = obj.getClass().getDeclaredField(name)
+        field.setAccessible(True)
+        return field.get(obj)
+    except:
+        return None
+
+
+def latest_openpnp_camera_image(machine_obj=None):
+    panel = get_camera_panel()
+    if panel is None:
+        return None
+    newest = None
+    newest_time = -1
+    for camera in all_cameras(machine_obj):
+        try:
+            view = panel.getCameraView(camera)
+        except:
+            view = None
+        if view is None:
+            continue
+        image = reflected_field(view, "lastFrame")
+        if image is None:
+            continue
+        try:
+            stamp = int(reflected_field(view, "lastFrameReceivedTime") or 0)
+        except:
+            stamp = 0
+        if newest is None or stamp >= newest_time:
+            newest = image
+            newest_time = stamp
+    return newest
+
+
 def mm_loc(x, y, z, r):
     return Location(LengthUnit.Millimeters, float(x), float(y), float(z), float(r))
 
@@ -279,6 +406,231 @@ def require_machine_execute():
     if not hasattr(machine_obj, "execute"):
         raise Exception("OpenPnP machine task execution is not available")
     return machine_obj
+
+
+def calibration_motion_speed(cfg):
+    return float(cfg.get("calibration_motion_speed", cfg.get("normal_motion_speed", 1.0)))
+
+
+def set_machine_speed(machine_obj, speed, logger=None, label="Machine speed"):
+    try:
+        machine_obj.setSpeed(float(speed))
+        if logger:
+            logger("%s set to %.0f%%" % (label, float(speed) * 100.0))
+        return True
+    except Exception, e:
+        if logger:
+            logger("Unable to set %s to %.0f%%: %s" % (label, float(speed) * 100.0, e))
+    return False
+
+
+def restore_machine_speed(machine_obj, logger=None):
+    return set_machine_speed(machine_obj, 1.0, logger, "Machine speed restored")
+
+
+def numeric_value(value, default=None):
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except:
+        return default
+
+
+def clamped(value, low, high):
+    if value < low:
+        return low
+    if value > high:
+        return high
+    return value
+
+
+def scaled_penalty(value, start, full, max_penalty):
+    value = numeric_value(value, None)
+    if value is None or value <= start:
+        return 0.0
+    if full <= start:
+        return float(max_penalty)
+    ratio = (value - start) / float(full - start)
+    return clamped(ratio, 0.0, 1.0) * float(max_penalty)
+
+
+def score_band(score):
+    score = int(score)
+    if score >= 90:
+        return "Excellent"
+    if score >= 75:
+        return "Good"
+    if score >= 50:
+        return "Fair"
+    return "Poor"
+
+
+def score_color(score):
+    score = clamped(float(score), 0.0, 100.0)
+    if score <= 50.0:
+        ratio = score / 50.0
+        red = 255
+        green = int(round(64.0 + ratio * (214.0 - 64.0)))
+        blue = 64
+    else:
+        ratio = (score - 50.0) / 50.0
+        red = int(round(255.0 - ratio * (255.0 - 58.0)))
+        green = int(round(214.0 - ratio * (214.0 - 178.0)))
+        blue = int(round(64.0 + ratio * (91.0 - 64.0)))
+    return Color(red, green, blue)
+
+
+def score_foreground(score):
+    if float(score) < 35.0:
+        return Color(255, 255, 255)
+    return Color(20, 20, 20)
+
+
+def solver_result_from(result, full_result=None):
+    if full_result is not None:
+        return full_result.get("head_offset_solver") or {}
+    if result is None:
+        return {}
+    if result.get("head_offset_solver") is not None:
+        return result.get("head_offset_solver") or {}
+    return result
+
+
+def rotation_error_penalty(records):
+    worst_error = 0.0
+    count = 0
+    for rec in records:
+        if rec.get("accepted", True) is False:
+            continue
+        actual = numeric_value(rec.get("actual_artifact_rotation_delta_deg"), None)
+        if actual is None:
+            continue
+        error = abs(abs(actual) - 180.0)
+        if error > worst_error:
+            worst_error = error
+        count += 1
+    if count == 0 and len(records) > 0:
+        return 15.0, "no accepted pairwise spin records"
+    penalty = scaled_penalty(worst_error, 2.0, 30.0, 15.0)
+    if penalty > 0.0:
+        return penalty, "pairwise spin error %.1f deg" % worst_error
+    return 0.0, None
+
+
+def xy_mag(data):
+    if data is None:
+        return None
+    x = numeric_value(data.get("x"), None)
+    y = numeric_value(data.get("y"), None)
+    if x is None or y is None:
+        return None
+    return math.sqrt(x * x + y * y)
+
+
+def full_run_warning_penalty(full_result):
+    if full_result is None:
+        return 0.0, []
+    penalty = 0.0
+    reasons = []
+    for key in ["square", "post_pairwise_resquare", "pre_builtin_square_verify", "post_builtin_square_verify"]:
+        section = full_result.get(key)
+        if not section:
+            continue
+        if section.get("ok") is False:
+            penalty += 3.0
+            reasons.append("%s reported not ok" % key)
+        error = section.get("normalized_error_deg")
+        if error is None:
+            error = section.get("final_error_deg")
+        error = numeric_value(error, None)
+        if error is not None:
+            section_penalty = scaled_penalty(abs(error), 0.25, 1.50, 3.0)
+            if section_penalty > 0.0:
+                penalty += section_penalty
+                reasons.append("%s error %.2f deg" % (key, abs(error)))
+    artifact_return = full_result.get("artifact_return")
+    if artifact_return:
+        if artifact_return.get("ok") is False:
+            penalty += 3.0
+            reasons.append("artifact return reported not ok")
+        xy_error = xy_mag(artifact_return.get("storage_verify_error_mm"))
+        xy_penalty = scaled_penalty(xy_error, 0.05, 0.50, 3.0)
+        if xy_penalty > 0.0:
+            penalty += xy_penalty
+            reasons.append("storage return XY error %.3f mm" % xy_error)
+        angle_error = numeric_value(artifact_return.get("storage_verify_error_deg"), None)
+        angle_penalty = scaled_penalty(abs(angle_error) if angle_error is not None else None, 1.0, 10.0, 2.0)
+        if angle_penalty > 0.0:
+            penalty += angle_penalty
+            reasons.append("storage return angle error %.2f deg" % abs(angle_error))
+    return min(10.0, penalty), reasons
+
+
+def calibration_quality_score(result, full_result=None):
+    if result is None:
+        return None
+    if not result.get("ok", False):
+        return {
+            "score": 0,
+            "band": score_band(0),
+            "reasons": ["calibration did not complete successfully"],
+        }
+
+    solver = solver_result_from(result, full_result)
+    if not solver.get("ok", False):
+        return {
+            "score": 0,
+            "band": score_band(0),
+            "reasons": ["head offset solver did not complete successfully"],
+        }
+
+    score = 100.0
+    reasons = []
+    valid = int(numeric_value(solver.get("pairwise_valid_pair_count"), 0.0))
+    rejected = int(numeric_value(solver.get("pairwise_rejected_pair_count"), 0.0))
+    total = valid + rejected
+    if total > 0 and rejected > 0:
+        penalty = 35.0 * (float(rejected) / float(total))
+        score -= penalty
+        reasons.append("rejected pairwise pairs %d/%d" % (rejected, total))
+
+    records = solver.get("per_angle_records") or []
+    penalty, reason = rotation_error_penalty(records)
+    score -= penalty
+    if reason is not None:
+        reasons.append(reason)
+
+    rms_raw = numeric_value(solver.get("pairwise_rms_raw_delta_mm"), None)
+    penalty = scaled_penalty(rms_raw, 0.05, 0.50, 15.0)
+    score -= penalty
+    if penalty > 0.0:
+        reasons.append("RMS raw delta %.3f mm" % rms_raw)
+
+    rms_corr = numeric_value(solver.get("pairwise_rms_solved_correction_mm"), None)
+    penalty = scaled_penalty(rms_corr, 0.02, 0.25, 15.0)
+    score -= penalty
+    if penalty > 0.0:
+        reasons.append("RMS solved correction %.3f mm" % rms_corr)
+
+    final_corr = numeric_value(solver.get("final_correction_mag_mm"), None)
+    penalty = scaled_penalty(final_corr, 0.05, 0.50, 10.0)
+    score -= penalty
+    if penalty > 0.0:
+        reasons.append("final correction %.3f mm" % final_corr)
+
+    penalty, full_reasons = full_run_warning_penalty(full_result)
+    score -= penalty
+    reasons.extend(full_reasons)
+
+    score = int(round(clamped(score, 0.0, 100.0)))
+    if len(reasons) == 0:
+        reasons.append("no quality penalties")
+    return {
+        "score": score,
+        "band": score_band(score),
+        "reasons": reasons,
+    }
 
 
 class FieldChangeListener(DocumentListener):
@@ -305,17 +657,24 @@ class CalibrationGui(object):
         self.pairwise_area = JTextArea()
         self.log_area = JTextArea()
         self.image_label = JLabel("No image")
+        self.last_pipeline_debug_image = None
+        self.last_pipeline_debug_stage = None
         self.current_label = JTextArea()
         self.top_status_label = JTextArea()
         self.state_label = JLabel("")
         self.stale_label = JLabel(" ")
+        self.score_label = JLabel("Calibration Score: --")
         self.part_combo = None
         self.nozzle_combo = None
         self.state = IDLE
         self.worker_running = False
+        self.abort_requested = AtomicBoolean(False)
+        self.abort_enabled = AtomicBoolean(False)
+        self.pre_run_state = IDLE
         self.last_full_snapshot = None
         self.last_full_nozzle_name = None
         self.last_full_result = None
+        self.last_preview_result = None
         self.backup_head_offsets = None
         self.unsaved_full_run_in_memory = False
         self.full_result_stale = False
@@ -368,11 +727,20 @@ class CalibrationGui(object):
             ("bottom_square_stage", "Bottom Square Raw Stage"),
             ("part_height_mm", "Legacy/Fallback Part Height mm"),
             ("use_openpnp_part_height", "OpenPnP Part Height Runtime Flag"),
+            ("Z_EXTRA", "Pick Z_EXTRA mm"),
+            ("pick_z_extra_max_mm", "Pick Z_EXTRA Max mm"),
             ("artifact_pick_angle_sign", "Artifact Pick Angle Sign"),
             ("artifact_pick_angle_offset_deg", "Artifact Pick Angle Offset deg"),
             ("focal_z_mm", "Focal Z mm"),
             ("search_radius_mm", "Search Radius mm"),
             ("search_step_mm", "Search Step mm"),
+            ("artifact_search_mode", "Artifact Search Mode"),
+            ("artifact_search_radius_mm", "Artifact Search Radius mm"),
+            ("artifact_search_step_mm", "Artifact Search Step mm"),
+            ("artifact_search_angular_step_deg", "Artifact Search Angular Step deg"),
+            ("artifact_search_max_points", "Artifact Search Max Points"),
+            ("calibration_motion_speed", "Calibration Motion Speed"),
+            ("pairwise_motion_speed", "Pairwise Speed"),
             ("angles_deg", "Pairwise Angles deg"),
             ("bottom_square_zero_deg", "Desired Nozzle Square Zero"),
             ("head_offset_sign", "Head Offset Sign"),
@@ -381,11 +749,10 @@ class CalibrationGui(object):
             ("square_settle_ms", "Square Settle ms"),
             ("square_sample_step_mm", "Square Sample Step mm"),
             ("enable_true_nozzle_rotation_zero", "Enable True Nozzle Rotation Zero"),
+            ("run_builtin_nozzle_tip_calibration", "Run Built-in Nozzle Tip Calibration"),
             ("rotation_axis_name", "Rotation Axis Name"),
             ("zeroed_square_verify_max_error_deg", "Zeroed Square Verify Max Error deg"),
             ("zeroed_square_verify_samples", "Zeroed Square Verify Samples"),
-            ("vacuum_ms", "Vacuum ms"),
-            ("blowoff_ms", "Blowoff ms"),
             ("max_delta_xy_mm", "Max Delta XY mm"),
             ("max_square_error_deg", "Max Square Error deg"),
             ("expected_big_diameter_px", "Expected Big Diameter px"),
@@ -396,6 +763,10 @@ class CalibrationGui(object):
         for i, spec in enumerate(specs):
             key, label = spec
             field = JTextField(24)
+            if key == "Z_EXTRA":
+                field.setToolTipText("Extra pick-only downward Z overtravel after reaching nominal board Z + part height. Used for spring-loaded nozzles. Not used for place.")
+            elif key == "pick_z_extra_max_mm":
+                field.setToolTipText("Maximum allowed pick-only Z_EXTRA overtravel in mm.")
             self.fields[key] = field
             self.watch_field(field)
             self.add_row(cfg_panel, i + 1, label, field)
@@ -404,6 +775,24 @@ class CalibrationGui(object):
         note.setPreferredSize(Dimension(680, 38))
         cfg_panel.add(note, self.full_width_gbc(len(specs) + 1))
         panel.add(cfg_panel)
+        panel.add(Box.createVerticalStrut(6))
+        fallback_panel = self.section("Advanced Fallback Dwell")
+        fallback_note = JTextArea("Normal pick/place dwell is read from OpenPnP nozzle/nozzle-tip settings. Set Force Fallback Dwell true to use these values instead.")
+        self.configure_status_area(fallback_note, 2)
+        fallback_note.setPreferredSize(Dimension(680, 38))
+        fallback_panel.add(fallback_note, self.full_width_gbc(0))
+        fallback_specs = [
+            ("force_fallback_dwell", "Force Fallback Dwell"),
+            ("vacuum_ms", "Fallback Pick Dwell ms"),
+            ("blowoff_ms", "Fallback Place/Blowoff Dwell ms"),
+        ]
+        for i, spec in enumerate(fallback_specs):
+            key, label = spec
+            field = JTextField(24)
+            self.fields[key] = field
+            self.watch_field(field)
+            self.add_row(fallback_panel, i + 1, label, field)
+        panel.add(fallback_panel)
         panel.add(Box.createVerticalStrut(6))
         panel.add(self.location_section("Storage Pocket Base Location", "storage_location"))
         panel.add(Box.createVerticalStrut(6))
@@ -532,14 +921,21 @@ class CalibrationGui(object):
 
         top = JPanel(GridBagLayout())
         top.setBorder(BorderFactory.createTitledBorder("Current Values"))
-        self.configure_status_area(self.current_label, 3)
-        self.current_label.setPreferredSize(Dimension(500, 58))
+        self.configure_status_area(self.current_label, 4)
+        self.current_label.setPreferredSize(Dimension(500, 76))
         self.add_row(top, 0, "Selected Nozzle / Head Offsets", self.current_label)
         self.add_row(top, 1, "State", self.state_label)
         self.add_row(top, 2, "Full Run Snapshot", self.stale_label)
         panel.add(top, BorderLayout.NORTH)
 
         center = JPanel(BorderLayout(6, 6))
+        self.score_label.setOpaque(True)
+        self.score_label.setHorizontalAlignment(JLabel.CENTER)
+        self.score_label.setFont(self.score_label.getFont().deriveFont(Font.BOLD, 20.0))
+        self.score_label.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8))
+        self.score_label.setBackground(Color(235, 235, 235))
+        self.score_label.setForeground(Color(20, 20, 20))
+        center.add(self.score_label, BorderLayout.NORTH)
         self.result_area.setEditable(False)
         self.pairwise_area.setEditable(False)
         self.result_area.setRows(12)
@@ -575,6 +971,7 @@ class CalibrationGui(object):
         self.save_btn = JButton("Save Config")
         self.measure_btn = JButton("Preview Head Offset Only")
         self.full_btn = JButton("START Full Calibration")
+        self.abort_btn = JButton("Abort")
         self.apply_btn = JButton("Apply Accepted Values")
         self.revert_btn = JButton("Revert To Backed-Up Values")
         self.refresh_btn = JButton("Refresh Current Values")
@@ -583,6 +980,7 @@ class CalibrationGui(object):
         self.save_btn.addActionListener(lambda event: self.save_action())
         self.measure_btn.addActionListener(lambda event: self.measure_action())
         self.full_btn.addActionListener(lambda event: self.full_run_action())
+        self.abort_btn.addActionListener(lambda event: self.abort_action())
         self.apply_btn.addActionListener(lambda event: self.apply_action())
         self.revert_btn.addActionListener(lambda event: self.revert_action())
         self.refresh_btn.addActionListener(lambda event: self.refresh_selectors_and_current())
@@ -591,7 +989,14 @@ class CalibrationGui(object):
             self.load_btn, self.save_btn, self.measure_btn, self.full_btn,
             self.apply_btn, self.revert_btn, self.refresh_btn
         ]
-        for button in self.action_buttons:
+        self.abort_btn.setBackground(Color(190, 45, 45))
+        self.abort_btn.setForeground(Color.WHITE)
+        self.abort_btn.setFont(self.abort_btn.getFont().deriveFont(Font.BOLD))
+        self.abort_btn.setVisible(False)
+        for button in [
+            self.load_btn, self.save_btn, self.measure_btn, self.full_btn,
+            self.abort_btn, self.apply_btn, self.revert_btn, self.refresh_btn
+        ]:
             panel.add(button)
         return panel
 
@@ -683,6 +1088,7 @@ class CalibrationGui(object):
         if self.worker_running:
             for button in all_buttons:
                 button.setEnabled(False)
+            self.abort_btn.setEnabled(self.abort_enabled.get() and not self.abort_requested.get())
             return
 
         has_backup = self.backup_head_offsets is not None
@@ -719,6 +1125,88 @@ class CalibrationGui(object):
         for button in self.location_action_buttons:
             button.setEnabled(True)
 
+    def abort_action(self):
+        if not self.worker_running or not self.abort_enabled.get():
+            return
+        if self.abort_requested.compareAndSet(False, True):
+            self.abort_btn.setEnabled(False)
+            self.abort_btn.setText("Abort Requested...")
+            self.append_log("Abort requested; stopping at the next calibration checkpoint")
+
+    def calibration_log(self, msg):
+        if self.abort_requested.get():
+            raise CalibrationAborted("Calibration aborted by operator")
+        self.append_log(msg)
+
+    def restore_original_offsets_after_abort(self, nozzle, original_offsets):
+        current = nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters)
+        original = original_offsets.convertToUnits(LengthUnit.Millimeters)
+        changed = (
+            abs(current.getX() - original.getX()) > 0.0000001 or
+            abs(current.getY() - original.getY()) > 0.0000001 or
+            abs(current.getZ() - original.getZ()) > 0.0000001 or
+            abs(current.getRotation() - original.getRotation()) > 0.0000001
+        )
+        if changed:
+            nozzle.setHeadOffsets(original_offsets)
+        self.append_log("Abort complete; original head offsets restored")
+        return changed
+
+    def cleanup_nozzle_after_abort(self, nozzle, cfg):
+        errors = []
+        part_was_on = False
+
+        def record_error(label, err):
+            errors.append("%s failed: %s" % (label, err))
+            self.append_log("Abort cleanup warning: %s" % errors[-1])
+
+        try:
+            vacuum = head_solver.get_vacuum_actuator(nozzle)
+            if vacuum is None:
+                raise Exception("No vacuum actuator is configured for the selected nozzle")
+            head_solver.set_actuator_state(vacuum, False)
+            head_solver.wait_after_actuator_change(
+                vacuum,
+                nozzle,
+                self.append_log,
+                cfg.get("actuator_settle_after_change_ms", 50)
+            )
+            self.append_log("Abort cleanup: vacuum off")
+        except Throwable, e:
+            record_error("vacuum off", e)
+        except Exception, e:
+            record_error("vacuum off", e)
+
+        try:
+            part = nozzle.getPart()
+            if part is not None:
+                part_was_on = True
+                nozzle.place()
+                if nozzle.getPart() is not None:
+                    raise Exception("nozzle still reports a part after place()")
+                self.append_log("Abort cleanup: nozzle part state cleared")
+            else:
+                self.append_log("Abort cleanup: nozzle already reports no part")
+        except Throwable, e:
+            record_error("part-state clear", e)
+        except Exception, e:
+            record_error("part-state clear", e)
+
+        try:
+            nozzle.moveToSafeZ()
+            wait_still(nozzle)
+            self.append_log("Abort cleanup: nozzle moved to safe Z")
+        except Throwable, e:
+            record_error("safe-Z move", e)
+        except Exception, e:
+            record_error("safe-Z move", e)
+
+        return {
+            "ok": len(errors) == 0,
+            "part_was_on": part_was_on,
+            "errors": errors,
+        }
+
     def append_log(self, msg):
         if not SwingUtilities.isEventDispatchThread():
             text = str(msg)
@@ -741,6 +1229,12 @@ class CalibrationGui(object):
         try:
             for key, field in self.fields.items():
                 value = cfg.get(key, DEFAULT_CONFIG.get(key, ""))
+                if key == "calibration_motion_speed":
+                    value = cfg.get("calibration_motion_speed",
+                                    cfg.get("normal_motion_speed", DEFAULT_CONFIG[key]))
+                elif key == "pairwise_motion_speed":
+                    value = cfg.get("pairwise_motion_speed",
+                                    cfg.get("held_die_motion_speed", DEFAULT_CONFIG[key]))
                 if isinstance(value, list):
                     field.setText(",".join([str(x) for x in value]))
                 elif value is None:
@@ -770,6 +1264,8 @@ class CalibrationGui(object):
         cfg["part_height_mm"] = float(self.fields["part_height_mm"].getText().strip())
         cfg["use_openpnp_part_height"] = parse_bool(
             self.fields["use_openpnp_part_height"].getText())
+        cfg["Z_EXTRA"] = float(self.fields["Z_EXTRA"].getText().strip())
+        cfg["pick_z_extra_max_mm"] = float(self.fields["pick_z_extra_max_mm"].getText().strip())
         cfg["artifact_pick_angle_sign"] = float(
             self.fields["artifact_pick_angle_sign"].getText().strip())
         cfg["artifact_pick_angle_offset_deg"] = float(
@@ -777,6 +1273,23 @@ class CalibrationGui(object):
         cfg["focal_z_mm"] = maybe_float(self.fields["focal_z_mm"].getText())
         cfg["search_radius_mm"] = float(self.fields["search_radius_mm"].getText().strip())
         cfg["search_step_mm"] = float(self.fields["search_step_mm"].getText().strip())
+        cfg["artifact_search_mode"] = self.fields["artifact_search_mode"].getText().strip() or "radial"
+        cfg["artifact_search_radius_mm"] = float(
+            self.fields["artifact_search_radius_mm"].getText().strip())
+        cfg["artifact_search_step_mm"] = float(
+            self.fields["artifact_search_step_mm"].getText().strip())
+        cfg["artifact_search_angular_step_deg"] = float(
+            self.fields["artifact_search_angular_step_deg"].getText().strip())
+        cfg["artifact_search_max_points"] = maybe_float(
+            self.fields["artifact_search_max_points"].getText())
+        if cfg["artifact_search_max_points"] is not None:
+            cfg["artifact_search_max_points"] = int(cfg["artifact_search_max_points"])
+        cfg["calibration_motion_speed"] = float(
+            self.fields["calibration_motion_speed"].getText().strip())
+        cfg["pairwise_motion_speed"] = float(
+            self.fields["pairwise_motion_speed"].getText().strip())
+        cfg["normal_motion_speed"] = cfg["calibration_motion_speed"]
+        cfg["held_die_motion_speed"] = cfg["pairwise_motion_speed"]
         cfg["angles_deg"] = self.parse_angles(self.fields["angles_deg"].getText())
         cfg["bottom_square_zero_deg"] = float(self.fields["bottom_square_zero_deg"].getText().strip())
         cfg["head_offset_sign"] = float(self.fields["head_offset_sign"].getText().strip())
@@ -786,11 +1299,15 @@ class CalibrationGui(object):
         cfg["square_sample_step_mm"] = float(self.fields["square_sample_step_mm"].getText().strip())
         cfg["enable_true_nozzle_rotation_zero"] = parse_bool(
             self.fields["enable_true_nozzle_rotation_zero"].getText())
+        cfg["run_builtin_nozzle_tip_calibration"] = parse_bool(
+            self.fields["run_builtin_nozzle_tip_calibration"].getText())
         cfg["rotation_axis_name"] = self.fields["rotation_axis_name"].getText().strip()
         cfg["zeroed_square_verify_max_error_deg"] = float(
             self.fields["zeroed_square_verify_max_error_deg"].getText().strip())
         cfg["zeroed_square_verify_samples"] = parse_bool(
             self.fields["zeroed_square_verify_samples"].getText())
+        cfg["force_fallback_dwell"] = parse_bool(
+            self.fields["force_fallback_dwell"].getText())
         cfg["vacuum_ms"] = int(float(self.fields["vacuum_ms"].getText().strip()))
         cfg["blowoff_ms"] = int(float(self.fields["blowoff_ms"].getText().strip()))
         cfg["max_delta_xy_mm"] = float(self.fields["max_delta_xy_mm"].getText().strip())
@@ -945,28 +1462,71 @@ class CalibrationGui(object):
         self.run_machine_worker(
             "Preview Head Offset Only",
             lambda: self.do_measure(cfg, nozzle_name),
-            self.measure_done
+            self.measure_done,
+            abortable=True
         )
 
     def do_measure(self, cfg, nozzle_name):
         machine_obj = require_machine_execute()
         nozzle = find_nozzle(nozzle_name)
+        cfg["_pipeline_debug_callback"] = self.publish_pipeline_debug_image
 
         class Task(Callable):
             def call(task_self):
-                return head_solver.solve_head_offset(
-                    cfg,
-                    nozzle=nozzle,
-                    camera=head_solver.get_default_camera(machine_obj),
-                    machine_obj=machine_obj,
-                    logger=self.append_log
-                )
+                original_offsets = nozzle.getHeadOffsets()
+                result = None
+                aborted = False
+                offsets_changed = False
+                abort_cleanup = None
+                try:
+                    set_machine_speed(machine_obj, calibration_motion_speed(cfg),
+                                      self.append_log, "Calibration motion speed")
+                    self.calibration_log("Abort checkpoint active")
+                    result = head_solver.solve_head_offset(
+                        cfg,
+                        nozzle=nozzle,
+                        camera=head_solver.get_default_camera(machine_obj),
+                        machine_obj=machine_obj,
+                        logger=self.calibration_log
+                    )
+                except CalibrationAborted:
+                    aborted = True
+                finally:
+                    self.abort_enabled.set(False)
+                    if aborted or self.abort_requested.get():
+                        aborted = True
+                        abort_cleanup = self.cleanup_nozzle_after_abort(nozzle, cfg)
+                        offsets_changed = self.restore_original_offsets_after_abort(
+                            nozzle, original_offsets)
+                    restore_machine_speed(machine_obj, self.append_log)
+                if aborted:
+                    return {
+                        "ok": False,
+                        "aborted": True,
+                        "offsets_restored": True,
+                        "offsets_changed_before_restore": offsets_changed,
+                        "abort_cleanup": abort_cleanup,
+                        "message": "Calibration aborted by operator; original head offsets restored"
+                    }
+                return result
 
         return machine_obj.execute(Task())
 
     def measure_done(self, result):
+        self.last_preview_result = result
         self.update_result(result, None)
-        if result is not None and result.get("ok", False):
+        if result is not None and result.get("aborted", False):
+            cleanup = result.get("abort_cleanup") or {}
+            if cleanup.get("ok", False):
+                self.set_state(self.pre_run_state)
+            else:
+                self.set_state(ERROR)
+                self.show_error(
+                    "Abort cleanup incomplete",
+                    "; ".join(cleanup.get("errors") or ["Unknown abort cleanup error"])
+                )
+            self.append_log(result.get("message"))
+        elif result is not None and result.get("ok", False):
             self.set_state(HEAD_OFFSET_MEASURED_ONLY)
             self.append_log("Preview Head Offset Only finished")
         else:
@@ -987,17 +1547,48 @@ class CalibrationGui(object):
         self.run_machine_worker(
             "START Full Calibration",
             lambda: self.do_full_run(cfg, snapshot, nozzle_name),
-            self.full_run_done
+            self.full_run_done,
+            abortable=True
         )
 
     def do_full_run(self, cfg, snapshot, nozzle_name):
         machine_obj = require_machine_execute()
         nozzle = find_nozzle(nozzle_name)
+        cfg["_pipeline_debug_callback"] = self.publish_pipeline_debug_image
 
         class Task(Callable):
             def call(task_self):
-                return tip_metrology.run_full_sequence(
-                    cfg, nozzle=nozzle, machine_obj=machine_obj, logger=self.append_log)
+                original_offsets = nozzle.getHeadOffsets()
+                result = None
+                aborted = False
+                offsets_changed = False
+                abort_cleanup = None
+                try:
+                    set_machine_speed(machine_obj, calibration_motion_speed(cfg),
+                                      self.append_log, "Calibration motion speed")
+                    self.calibration_log("Abort checkpoint active")
+                    result = tip_metrology.run_full_sequence(
+                        cfg, nozzle=nozzle, machine_obj=machine_obj, logger=self.calibration_log)
+                except CalibrationAborted:
+                    aborted = True
+                finally:
+                    self.abort_enabled.set(False)
+                    if aborted or self.abort_requested.get():
+                        aborted = True
+                        abort_cleanup = self.cleanup_nozzle_after_abort(nozzle, cfg)
+                        offsets_changed = self.restore_original_offsets_after_abort(
+                            nozzle, original_offsets)
+                    restore_machine_speed(machine_obj, self.append_log)
+                if aborted:
+                    return {
+                        "ok": False,
+                        "aborted": True,
+                        "offsets_restored": True,
+                        "offsets_changed_before_restore": offsets_changed,
+                        "abort_cleanup": abort_cleanup,
+                        "message": "Calibration aborted by operator; original head offsets restored"
+                    }
+                return result
 
         result = machine_obj.execute(Task())
         return {"result": result, "snapshot": snapshot, "nozzle_name": nozzle_name}
@@ -1006,9 +1597,30 @@ class CalibrationGui(object):
         result = None
         if payload is not None:
             result = payload.get("result")
+        self.last_preview_result = result
         self.update_result(result, result)
-        self.capture_full_run_backup(result)
-        if result is not None and result.get("ok", False):
+        if result is not None and result.get("aborted", False):
+            self.unsaved_full_run_in_memory = False
+            self.full_result_stale = False
+            cleanup = result.get("abort_cleanup") or {}
+            if cleanup.get("ok", False):
+                self.stale_label.setText("Aborted; vacuum off, nozzle empty, safe Z, offsets restored")
+            else:
+                self.stale_label.setText("Aborted with cleanup warnings; check log")
+            self.refresh_current_values()
+            if cleanup.get("ok", False):
+                self.set_state(self.pre_run_state)
+            else:
+                self.set_state(ERROR)
+                self.show_error(
+                    "Abort cleanup incomplete",
+                    "; ".join(cleanup.get("errors") or ["Unknown abort cleanup error"])
+                )
+            self.append_log(result.get("message"))
+            if result.get("offsets_changed_before_restore", False):
+                self.append_log("Head offsets changed before abort; nozzle-tip recalibration may be required")
+        elif result is not None and result.get("ok", False):
+            self.capture_full_run_backup(result)
             self.last_full_snapshot = payload.get("snapshot")
             self.last_full_nozzle_name = payload.get("nozzle_name")
             self.last_full_result = result
@@ -1019,6 +1631,7 @@ class CalibrationGui(object):
             self.set_state(FULL_RUN_APPLIED_IN_MEMORY)
             self.append_log("Run Full Calibration finished; machine state is applied in memory")
         else:
+            self.capture_full_run_backup(result)
             if result is not None and (result.get("head_offsets") or {}).get("applied_head_offsets_mm") is not None:
                 self.unsaved_full_run_in_memory = True
             self.set_state(ERROR)
@@ -1103,9 +1716,14 @@ class CalibrationGui(object):
         self.set_state(REVERTED_HEAD_OFFSET_ONLY_RECAL_REQUIRED)
         self.append_log("Revert restored old head offsets in memory only. To persist the revert, run required nozzle-tip recalibration and then save from OpenPnP or rerun full calibration.")
 
-    def run_machine_worker(self, name, work, done):
+    def run_machine_worker(self, name, work, done, abortable=False):
         if self.worker_running:
             return
+        self.pre_run_state = self.state
+        self.abort_requested.set(False)
+        self.abort_enabled.set(bool(abortable))
+        self.abort_btn.setText("Abort")
+        self.abort_btn.setVisible(bool(abortable))
         self.worker_running = True
         self.update_buttons()
         self.append_log("Starting %s" % name)
@@ -1117,6 +1735,8 @@ class CalibrationGui(object):
 
             def done(worker_self):
                 gui_self.worker_running = False
+                gui_self.abort_enabled.set(False)
+                gui_self.abort_btn.setVisible(False)
                 try:
                     done(worker_self.get())
                 except Exception, e:
@@ -1154,9 +1774,13 @@ class CalibrationGui(object):
             cfg = self.collect_config()
             nozzle = find_nozzle(cfg.get("nozzle_name", ""))
             loc = nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters)
-            text = "Nozzle: %s  Part: %s  Head Offsets: X %.4f  Y %.4f  Z %.4f  R %.4f  Config: %s  State: %s" % (
+            pick_dwell = head_solver.get_dwell_ms(nozzle, "pick", cfg, 150, logger=None)
+            place_dwell = head_solver.get_dwell_ms(nozzle, "place", cfg, 120, logger=None)
+            dwell_source = "fallback" if bool(cfg.get("force_fallback_dwell", False)) else "effective"
+            text = "Nozzle: %s  Part: %s  Head Offsets: X %.4f  Y %.4f  Z %.4f  R %.4f  Dwell %s pick/place ms: %s/%s  Config: %s  State: %s" % (
                 nozzle.getName(), cfg.get("part_id", ""), loc.getX(), loc.getY(),
-                loc.getZ(), loc.getRotation(), CONFIG_PATH, self.state)
+                loc.getZ(), loc.getRotation(), dwell_source, str(pick_dwell), str(place_dwell),
+                CONFIG_PATH, self.state)
             self.current_label.setText(text)
             self.top_status_label.setText(text)
         except Exception, e:
@@ -1168,6 +1792,7 @@ class CalibrationGui(object):
         if result is None:
             self.result_area.setText("")
             self.pairwise_area.setText("")
+            self.update_score_banner(None)
             return
         solver = result
         if full_result is not None:
@@ -1179,6 +1804,14 @@ class CalibrationGui(object):
             artifact_return = full_result.get("artifact_return") or {}
 
         lines = []
+        quality = calibration_quality_score(result, full_result)
+        self.update_score_banner(quality)
+        if quality is not None:
+            lines.append("calibration score: %d%% - %s" % (
+                quality.get("score", 0), quality.get("band", "")))
+            reasons = quality.get("reasons") or []
+            if len(reasons) > 0:
+                lines.append("score reasons: %s" % "; ".join([str(reason) for reason in reasons[:5]]))
         lines.append("ok: %s" % safe_get(result, "ok"))
         lines.append("message: %s" % safe_get(result, "message"))
         lines.append("old head offsets: %s" % loc_text(solver.get("old_head_offsets_mm")))
@@ -1206,21 +1839,179 @@ class CalibrationGui(object):
             ))
         self.pairwise_area.setText("\n".join(out))
 
+    def update_score_banner(self, quality):
+        if quality is None:
+            self.score_label.setText("Calibration Score: --")
+            self.score_label.setBackground(Color(235, 235, 235))
+            self.score_label.setForeground(Color(20, 20, 20))
+            return
+        score = int(quality.get("score", 0))
+        band = str(quality.get("band", score_band(score)))
+        self.score_label.setText("Calibration Score: %d%% - %s" % (score, band))
+        self.score_label.setBackground(score_color(score))
+        self.score_label.setForeground(score_foreground(score))
+
+    def normalize_overlay_point(self, point):
+        if point is None:
+            return None
+        try:
+            if point.get("x_px", None) is not None:
+                x = float(point.get("x_px"))
+            else:
+                x = float(point.get("x"))
+            if point.get("y_px", None) is not None:
+                y = float(point.get("y_px"))
+            else:
+                y = float(point.get("y"))
+        except:
+            return None
+        radius = 0.0
+        try:
+            if point.get("radius_px", None) is not None:
+                radius = float(point.get("radius_px"))
+            elif point.get("radius", None) is not None:
+                radius = float(point.get("radius"))
+            elif point.get("diameter_px", None) is not None:
+                radius = float(point.get("diameter_px")) / 2.0
+            elif point.get("diameter", None) is not None:
+                radius = float(point.get("diameter")) / 2.0
+        except:
+            radius = 0.0
+        return {"x": x, "y": y, "radius": radius}
+
+    def add_circle_points(self, out, holder):
+        if holder is None:
+            return
+        if isinstance(holder, dict):
+            for key in ["big_circle", "small_circle", "center_circle", "orientation_circle"]:
+                point = self.normalize_overlay_point(holder.get(key))
+                if point is not None:
+                    out.append(point)
+            measurement = holder.get("measurement")
+            if measurement is not holder:
+                self.add_circle_points(out, measurement)
+            storage = holder.get("storage_verify")
+            if storage is not holder:
+                self.add_circle_points(out, storage)
+            solver = holder.get("head_offset_solver")
+            if solver is not holder:
+                self.add_circle_points(out, solver)
+            records = holder.get("per_angle_records") or []
+            if len(records) > 0:
+                self.add_circle_points(out, records[-1])
+
+    def overlay_points_from_result(self):
+        out = []
+        self.add_circle_points(out, self.last_preview_result)
+        if len(out) == 0:
+            self.add_circle_points(out, self.last_full_result)
+        return out
+
+    def draw_preview_overlay(self, image, points):
+        if image is None or len(points) == 0:
+            return image
+        w = int(image.getWidth())
+        h = int(image.getHeight())
+        out = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+        g = out.createGraphics()
+        try:
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g.drawImage(image, 0, 0, None)
+            g.setColor(Color(42, 140, 255))
+            g.setStroke(BasicStroke(3.0))
+            for point in points:
+                x = float(point.get("x", 0.0))
+                y = float(point.get("y", 0.0))
+                r = float(point.get("radius", 0.0))
+                if r <= 0.0:
+                    r = 14.0
+                if r < 4.0:
+                    r = 9.0
+                g.drawOval(int(round(x - r)), int(round(y - r)),
+                           int(round(2.0 * r)), int(round(2.0 * r)))
+        finally:
+            g.dispose()
+        return out
+
+    def scaled_preview_image(self, image):
+        try:
+            max_w = self.image_label.getWidth()
+            max_h = self.image_label.getHeight()
+            if max_w < 80:
+                max_w = 420
+            if max_h < 80:
+                max_h = 180
+            iw = float(image.getWidth())
+            ih = float(image.getHeight())
+            scale = min(float(max_w) / iw, float(max_h) / ih)
+            if scale > 1.0:
+                scale = 1.0
+            w = max(1, int(iw * scale))
+            h = max(1, int(ih * scale))
+            return image.getScaledInstance(w, h, Image.SCALE_SMOOTH)
+        except:
+            return image
+
+    def show_debug_image(self, image, stage_name=None, add_overlay=False):
+        if image is None:
+            self.image_label.setIcon(None)
+            self.image_label.setText("No image")
+            return
+        if add_overlay:
+            image = self.draw_preview_overlay(image, self.overlay_points_from_result())
+        scaled = self.scaled_preview_image(image)
+        self.image_label.setText("")
+        self.image_label.setIcon(ImageIcon(scaled))
+        if stage_name:
+            self.image_label.setToolTipText("Pipeline result stage: %s" % stage_name)
+        else:
+            self.image_label.setToolTipText(None)
+
+    def publish_pipeline_debug_image(self, pipeline, stage_name):
+        result = pipeline.getResult(stage_name)
+        mat = None
+        if result is not None:
+            try:
+                mat = result.getImage()
+            except:
+                pass
+        if mat is None:
+            mat = pipeline.getWorkingImage()
+        if mat is None or mat.empty():
+            raise Exception("stage returned no image")
+
+        # Convert immediately: OpenPnP may release/reuse the stage Mat after the
+        # pipeline advances, while BufferedImage remains safe for the Swing UI.
+        image = OpenCvUtils.toBufferedImage(mat)
+        self.last_pipeline_debug_image = image
+        debug_stage = str(stage_name)
+        self.last_pipeline_debug_stage = debug_stage
+        gui_self = self
+
+        class ImageTask(Runnable):
+            def run(task_self):
+                gui_self.show_debug_image(
+                    image, debug_stage, add_overlay=False)
+
+        SwingUtilities.invokeLater(ImageTask())
+
     def update_image(self):
         try:
             path = self.fields["debug_image_path"].getText().strip()
-            if not path or not os.path.exists(path):
-                self.image_label.setIcon(None)
-                self.image_label.setText("No image")
-                return
-            img = ImageIO.read(File(path))
+            img = None
+            stage_name = None
+            if self.last_pipeline_debug_image is not None:
+                img = self.last_pipeline_debug_image
+                stage_name = self.last_pipeline_debug_stage
+            if img is None and path and os.path.exists(path):
+                img = ImageIO.read(File(path))
             if img is None:
-                self.image_label.setIcon(None)
-                self.image_label.setText("No image")
+                img = latest_openpnp_camera_image()
+            if img is None:
+                self.show_debug_image(None)
                 return
-            scaled = img.getScaledInstance(420, 180, Image.SCALE_SMOOTH)
-            self.image_label.setText("")
-            self.image_label.setIcon(ImageIcon(scaled))
+            self.show_debug_image(img, stage_name,
+                                  add_overlay=(stage_name is None))
         except:
             self.image_label.setIcon(None)
             self.image_label.setText("Image unavailable")

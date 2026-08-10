@@ -1,0 +1,82 @@
+{
+  "contact_actuator_name": "NeedleContactProbe_READ", 
+  "contact_probe": {
+    "acquisition_method": "hardware_interrupt", 
+    "channel": "Q1", 
+    "coarse_feed": 2000.0, 
+    "coarse_repeats": 1.0, 
+    "coarse_speed": 1.0, 
+    "coarse_step_mm": 0.1, 
+    "debounce_count": 10.0, 
+    "debounce_interval_ms": 20.0, 
+    "debounce_retries": 4.0, 
+    "direct_fine_repeats": 5.0, 
+    "fine_feed": 150.0, 
+    "fine_repeats": 3.0, 
+    "fine_speed": 1.0, 
+    "fine_step_mm": 0.01, 
+    "g38_attempts": 2.0, 
+    "max_descent_mm": 4.0, 
+    "max_release_retract_mm": 2.0, 
+    "mode": "direct_gcode", 
+    "probe_acceleration": 1000.0, 
+    "read_settle_ms": 40.0, 
+    "release_retract_step_mm": 0.2, 
+    "retract_after_contact_mm": 1.0, 
+    "sequence_actuator_name": "Run Contact Probe", 
+    "start_above_mm": 2.0
+  }, 
+  "debug": {
+    "save_last_capture": true, 
+    "verbose": false
+  }, 
+  "fine_probe_speed": 1.0, 
+  "head_name": "", 
+  "nozzle_name": "Dispense Head", 
+  "probe_speed": 1.0, 
+  "safe_z_mm": 25.0, 
+  "schema_version": 2, 
+  "top_camera_name": "Top", 
+  "travel_speed": 1.0, 
+  "voron_actuator_name": "Voron Z Probe", 
+  "z_probe": {
+    "acquisition_method": "hardware_interrupt", 
+    "channel": "Q0", 
+    "coarse_feed": 2000.0, 
+    "coarse_step_mm": 0.1, 
+    "debounce_count": 10.0, 
+    "debounce_interval_ms": 20.0, 
+    "debounce_retries": 4.0, 
+    "fine_feed": 150.0, 
+    "fine_repeats": 5.0, 
+    "fine_step_mm": 0.01, 
+    "g38_attempts": 2.0, 
+    "max_descent_mm": 4.0, 
+    "max_release_retract_mm": 2.0, 
+    "mode": "direct_gcode", 
+    "polling_coarse_repeats": 1.0, 
+    "polling_coarse_speed": 1.0, 
+    "polling_fine_repeats": 3.0, 
+    "polling_fine_speed": 1.0, 
+    "probe_acceleration": 1000.0, 
+    "read_settle_ms": 40.0, 
+    "release_retract_step_mm": 0.2, 
+    "retract_after_contact_mm": 1.0, 
+    "sequence_actuator_name": "Run Voron Probe", 
+    "start_above_mm": 2.0
+  }, 
+  "z_touch": {
+    "location": {
+      "rotation": 0.0, 
+      "x": 284.8419, 
+      "y": 396.9272, 
+      "z": 5.0
+    }, 
+    "pipeline": {
+      "mode": "named", 
+      "name": "CAL_1pt_grid", 
+      "path": ""
+    }, 
+    "result_stage": "results"
+  }
+}

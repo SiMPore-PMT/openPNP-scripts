@@ -2,7 +2,8 @@
 
 import math
 
-from java.lang import Thread, Throwable
+from jarray import array
+from java.lang import Boolean, Class, Object, System, Thread, Throwable
 from org.openpnp.model import Configuration, Location, LengthUnit
 from org.openpnp.spi import Nozzle as SpiNozzle
 from org.openpnp.spi.MotionPlanner import CompletionType
@@ -10,6 +11,7 @@ from org.openpnp.util import MovableUtils, VisionUtils
 
 
 DEFAULT_ANGLES_DEG = [-150.0, -90.0, -30.0, 30.0, 90.0, 150.0]
+_RUNTIME_PICK_COUNT = 0
 
 
 def log_msg(logger, msg):
@@ -17,6 +19,18 @@ def log_msg(logger, msg):
         logger(str(msg))
     else:
         print str(msg)
+
+
+def publish_pipeline_debug_image(config, pipeline, stage_name, logger=None):
+    """Publish a just-processed stage while its pipeline image is still valid."""
+    callback = config.get("_pipeline_debug_callback")
+    if callback is None:
+        return
+    try:
+        callback(pipeline, stage_name)
+    except Exception, e:
+        log_msg(logger, "Unable to publish pipeline debug stage '%s': %s" % (
+            stage_name, e))
 
 
 def mm_loc(x, y, z, r):
@@ -65,23 +79,119 @@ def move_direct_speed(movable, target, speed=None):
         except TypeError:
             movable.moveTo(target)
     else:
-        try:
-            movable.moveTo(target, 1.0)
-        except TypeError:
-            movable.moveTo(target)
+        movable.moveTo(target)
     wait_still(movable)
 
 
+def move_pairwise_180_at_safe_z(movable, target, logger=None):
+    """Keep the pairwise 180-degree rotation separate from tiny XY corrections."""
+    target = target.convertToUnits(LengthUnit.Millimeters)
+
+    # Match MovableUtils safe-Z handling by lifting the complete head first. The
+    # actual readback retains OpenPnP's effective safe Z for the following moves.
+    movable.getHead().moveToSafeZ()
+    wait_still(movable)
+    safe_location = get_movable_location(movable)
+
+    rotation_target = mm_loc(
+        safe_location.getX(),
+        safe_location.getY(),
+        safe_location.getZ(),
+        target.getRotation(),
+    )
+    log_msg(logger, "Pairwise 180 safe-Z rotation target: %s" % loc_to_log(rotation_target))
+    move_direct(movable, rotation_target)
+
+    xy_target = mm_loc(
+        target.getX(),
+        target.getY(),
+        safe_location.getZ(),
+        target.getRotation(),
+    )
+    move_direct(movable, xy_target)
+    move_direct(movable, target)
+
+
+def resolve_motion_speed(config, category, default_value, logger=None):
+    # OpenPnP moveTo(location, speed) uses a speed scalar; keep all script aliases
+    # mapped in one place so pairwise and held-die moves cannot diverge silently.
+    category = str(category)
+    key_sets = {
+        "normal": ["calibration_motion_speed", "normal_motion_speed"],
+        "calibration": ["calibration_motion_speed", "normal_motion_speed"],
+        "held_die": ["pairwise_motion_speed", "held_die_motion_speed"],
+        "held_die_z": ["held_die_z_speed", "pairwise_motion_speed", "held_die_motion_speed"],
+        "pick_z_extra": ["pick_z_extra_speed", "held_die_z_speed", "pairwise_motion_speed", "held_die_motion_speed"],
+        "safe_travel": ["safe_travel_speed", "calibration_motion_speed", "normal_motion_speed"],
+        "empty_nozzle_rotation": ["empty_nozzle_rotation_speed"],
+    }
+    keys = key_sets.get(category, [])
+    source = "default"
+    raw_value = default_value
+    for key in keys:
+        if key in config:
+            source = key
+            raw_value = config[key]
+            break
+    speed = float(raw_value)
+    if bool(config.get("speed_clamp_enabled", False)):
+        if "speed_min" in config and speed < float(config["speed_min"]):
+            log_msg(logger, "Motion speed clamp: category %s %.6f -> min %.6f" % (
+                category, speed, float(config["speed_min"])))
+            speed = float(config["speed_min"])
+        if "speed_max" in config and speed > float(config["speed_max"]):
+            log_msg(logger, "Motion speed clamp: category %s %.6f -> max %.6f" % (
+                category, speed, float(config["speed_max"])))
+            speed = float(config["speed_max"])
+    return {
+        "speed": speed,
+        "category": category,
+        "source": source,
+        "raw_value": raw_value,
+    }
+
+
+def log_resolved_motion_speed(config, category, default_value, logger=None):
+    resolved = resolve_motion_speed(config, category, default_value, logger=logger)
+    log_msg(logger, "Motion speed resolved: category %s OpenPnP speed scalar %.6f source %s raw %s" % (
+        resolved["category"], resolved["speed"], resolved["source"], str(resolved["raw_value"])))
+    return resolved["speed"]
+
+
+def log_motion_speed_config(config, logger=None):
+    for category, default_value in [
+        ("normal", 1.0),
+        ("calibration", 1.0),
+        ("held_die", 0.60),
+        ("held_die_z", 0.60),
+        ("pick_z_extra", 0.60),
+        ("safe_travel", 1.0),
+    ]:
+        log_resolved_motion_speed(config, category, default_value, logger=logger)
+
+
+def log_move_speed(logger, config, category, speed, target, nozzle=None):
+    if speed is None:
+        return
+    resolved = resolve_motion_speed(config, category, speed, logger=logger)
+    has_part = False
+    if nozzle is not None:
+        has_part = nozzle_has_part(nozzle)
+    log_msg(logger, "Motion move: category %s OpenPnP speed scalar %.6f source %s raw %s target %s nozzle_has_part %s" % (
+        category, float(speed), resolved["source"], str(resolved["raw_value"]),
+        loc_to_log(target), str(has_part)))
+
+
 def held_die_speed(config):
-    return float(config.get("held_die_motion_speed", 0.60))
-
-
-def empty_nozzle_rotation_speed(config):
-    return float(config.get("empty_nozzle_rotation_speed", 0.20))
+    return resolve_motion_speed(config, "held_die", 0.60)["speed"]
 
 
 def normal_motion_speed(config):
-    return float(config.get("normal_motion_speed", 1.0))
+    return resolve_motion_speed(config, "normal", 1.0)["speed"]
+
+
+def empty_nozzle_rotation_speed(config):
+    return resolve_motion_speed(config, "empty_nozzle_rotation", 0.20)["speed"]
 
 
 def get_movable_location(movable):
@@ -149,6 +259,114 @@ def config_with_transfer_z_mode(config, transfer_z_mode):
     return out
 
 
+def config_with_transfer_speed(config, transfer_z_mode, speed):
+    out = config_with_transfer_z_mode(config, transfer_z_mode)
+    out["calibration_motion_speed"] = resolve_motion_speed(config, "normal", 1.0)["speed"]
+    out["normal_motion_speed"] = resolve_motion_speed(config, "normal", 1.0)["speed"]
+    out["pairwise_motion_speed"] = float(speed)
+    out["held_die_motion_speed"] = float(speed)
+    return out
+
+
+def copy_pick_z_extra_config(out, config):
+    for key in [
+        "Z_EXTRA",
+        "z_extra",
+        "pick_z_extra_mm",
+        "pick_z_extra_max_mm",
+        "pick_z_extra_readback_tolerance_mm",
+        "pick_z_extra_speed",
+        "held_die_z_speed",
+        "z_readback_tolerance_mm",
+        "actuator_settle_after_change_ms",
+        "first_pick_extra_dwell_ms",
+        "first_pick_extra_dwell_enabled",
+        "force_fallback_dwell",
+        "manual_vacuum_before_nozzle_pick",
+        "enable_pick_z_extra",
+    ]:
+        if key in config:
+            out[key] = config[key]
+    out["enable_pick_z_extra"] = bool(config.get("enable_pick_z_extra", False))
+    return out
+
+
+def disable_pick_z_extra_config(out):
+    out["enable_pick_z_extra"] = False
+    return out
+
+
+def get_pick_z_extra_mm(config):
+    if not bool(config.get("enable_pick_z_extra", False)):
+        return 0.0
+    source = None
+    raw_value = 0.1
+    for key in ["Z_EXTRA", "z_extra", "pick_z_extra_mm"]:
+        if key in config:
+            source = key
+            raw_value = config[key]
+            break
+    z_extra = float(raw_value)
+    if z_extra < 0.0:
+        if source is None:
+            z_extra = 0.0
+        else:
+            raise Exception("Pick Z_EXTRA %.6f mm from %s is negative" % (z_extra, source))
+    max_extra = float(config.get("pick_z_extra_max_mm", 2.0))
+    if max_extra < 0.0:
+        raise Exception("pick_z_extra_max_mm %.6f is negative" % max_extra)
+    if z_extra > max_extra:
+        raise Exception("Pick Z_EXTRA %.6f mm exceeds max %.6f mm" % (z_extra, max_extra))
+    return z_extra
+
+
+def apply_pick_z_extra(nozzle, config, logger=None, speed=None):
+    before = get_movable_location(nozzle)
+    z_extra = get_pick_z_extra_mm(config)
+    if z_extra == 0.0:
+        log_msg(logger, "Pick Z_EXTRA disabled: 0.000000 mm")
+        before_dict = loc_to_dict(before)
+        return {
+            "enabled": False,
+            "z_extra_mm": z_extra,
+            "before_location": before_dict,
+            "target_location": before_dict,
+            "after_location": before_dict,
+            "z_error_mm": 0.0,
+        }
+
+    target = mm_loc(
+        before.getX(),
+        before.getY(),
+        float(before.getZ()) - z_extra,
+        before.getRotation(),
+    )
+    log_msg(logger, "Pick Z_EXTRA enabled: %.6f mm" % z_extra)
+    log_msg(logger, "Pick Z_EXTRA compression move: old Z %.6f target Z %.6f" % (
+        float(before.getZ()), float(target.getZ())))
+    log_msg(logger, "Pick Z_EXTRA compression target: %s" % loc_to_log(target))
+    move_direct_speed(nozzle, target, speed)
+    after = get_movable_location(nozzle)
+    z_error = float(after.getZ()) - float(target.getZ())
+    tolerance = float(config.get(
+        "pick_z_extra_readback_tolerance_mm",
+        config.get("z_readback_tolerance_mm", 0.05)))
+    log_msg(logger, "Pick Z_EXTRA actual readback: %s" % loc_to_log(after))
+    log_msg(logger, "Pick Z_EXTRA Z readback: commanded %.6f actual %.6f error %.6f tolerance %.6f" % (
+        float(target.getZ()), float(after.getZ()), z_error, tolerance))
+    if abs(z_error) > tolerance:
+        raise Exception("Pick Z_EXTRA Z readback error %.6f exceeds tolerance %.6f" % (
+            z_error, tolerance))
+    return {
+        "enabled": True,
+        "z_extra_mm": z_extra,
+        "before_location": loc_to_dict(before),
+        "target_location": loc_to_dict(target),
+        "after_location": loc_to_dict(after),
+        "z_error_mm": z_error,
+    }
+
+
 def length_to_mm(value):
     if value is None:
         return None
@@ -194,6 +412,97 @@ def get_openpnp_part_height_mm(part):
     return None
 
 
+def get_nozzle_tip(nozzle):
+    for name in ["getNozzleTip", "getTip"]:
+        try:
+            method = getattr(nozzle, name)
+            tip = method()
+            if tip is not None:
+                return tip
+        except:
+            pass
+    return None
+
+
+def dwell_value_to_ms(value):
+    if value is None:
+        return None
+    try:
+        return int(round(float(value)))
+    except:
+        pass
+    for name in ["getValue", "getValueAsDouble", "toMillis", "toMilliseconds"]:
+        try:
+            method = getattr(value, name)
+            return int(round(float(method())))
+        except:
+            pass
+    return None
+
+
+def get_openpnp_dwell_ms(nozzle, names, label, logger=None):
+    # Prefer OpenPnP nozzle/nozzle-tip dwell settings. Script dwell config remains
+    # only as a compatibility fallback for older configs or missing getters.
+    objects = [nozzle, get_nozzle_tip(nozzle)]
+    object_names = ["nozzle", "nozzle tip"]
+    for i in range(len(objects)):
+        obj = objects[i]
+        if obj is None:
+            continue
+        for name in names:
+            try:
+                method = getattr(obj, name)
+                value = method()
+                ms = dwell_value_to_ms(value)
+                if ms is not None:
+                    log_msg(logger, "OpenPnP %s dwell from %s.%s: %d ms" % (
+                        label, object_names[i], name, ms))
+                    return ms
+            except:
+                pass
+    return None
+
+
+def get_pick_dwell_ms_from_openpnp(nozzle, logger=None):
+    return get_openpnp_dwell_ms(nozzle, [
+        "getPickDwellMilliseconds",
+        "getPickDwellMs",
+        "getPickDwell",
+        "getPickDwellTime",
+    ], "pick", logger=logger)
+
+
+def get_place_dwell_ms_from_openpnp(nozzle, logger=None):
+    return get_openpnp_dwell_ms(nozzle, [
+        "getPlaceDwellMilliseconds",
+        "getPlaceDwellMs",
+        "getPlaceDwell",
+        "getPlaceDwellTime",
+    ], "place", logger=logger)
+
+
+def get_dwell_ms(nozzle, kind, config, fallback_ms, logger=None):
+    kind = str(kind)
+    if kind == "pick":
+        fallback_key = "vacuum_ms"
+    else:
+        fallback_key = "blowoff_ms"
+    fallback = int(config.get(fallback_key, fallback_ms))
+    if bool(config.get("force_fallback_dwell", False)):
+        log_msg(logger, "Force fallback %s dwell enabled; using %s=%d ms" % (
+            kind, fallback_key, fallback))
+        return fallback
+    if kind == "pick":
+        ms = get_pick_dwell_ms_from_openpnp(nozzle, logger=logger)
+    else:
+        ms = get_place_dwell_ms_from_openpnp(nozzle, logger=logger)
+    if ms is not None:
+        return ms
+    log_msg(logger, "OpenPnP %s dwell unavailable; using legacy fallback %s=%d ms" % (
+        kind, fallback_key, fallback))
+    return fallback
+
+
 def config_with_runtime_part_height(config, part, logger=None):
     out = {}
     for key in config:
@@ -222,8 +531,12 @@ def rotate_nozzle_lifted_unwrapped(nozzle, target_rotation_deg, logger=None, spe
         target_r
     )
 
-    log_msg(logger, "Rotate nozzle lifted unwrapped: current %.6f target %.6f delta %.6f speed %s" %
-        (current_r, target_r, target_r - current_r, str(speed)))
+    if speed is None:
+        log_msg(logger, "Rotate nozzle lifted unwrapped: current %.6f target %.6f delta %.6f using OpenPnP default motion" %
+            (current_r, target_r, target_r - current_r))
+    else:
+        log_msg(logger, "Rotate nozzle lifted unwrapped: current %.6f target %.6f delta %.6f speed %.6f" %
+            (current_r, target_r, target_r - current_r, float(speed)))
 
     move_direct_speed(nozzle, target, speed)
     return get_movable_location(nozzle)
@@ -240,21 +553,6 @@ def nozzle_has_part(nozzle):
     except:
         pass
     return False
-
-
-def move_nozzle_xy_lifted(nozzle, x, y, logger=None, speed=None):
-    current = get_movable_location(nozzle)
-    target = mm_loc(
-        float(x),
-        float(y),
-        current.getZ(),
-        current.getRotation(),
-    )
-    move_direct_speed(nozzle, target, speed)
-    moved = get_movable_location(nozzle)
-    log_msg(logger, "Place XY move lifted: old X/Y %.6f %.6f new X/Y %.6f %.6f" % (
-        float(current.getX()), float(current.getY()), float(moved.getX()), float(moved.getY())))
-    return moved
 
 
 def java_list_to_py(model):
@@ -539,12 +837,20 @@ def detection_pick_location(found):
 def set_actuator_state(actuator, on_off):
     if actuator is None:
         return False
-    if hasattr(actuator, "actuate"):
-        actuator.actuate(bool(on_off))
-    elif hasattr(actuator, "setActuated"):
-        actuator.setActuated(bool(on_off))
-    else:
-        raise Exception("Actuator has no supported state method")
+    value = Boolean.TRUE if bool(on_off) else Boolean.FALSE
+    errors = []
+    for method_name in ["actuate", "setActuated"]:
+        try:
+            method = actuator.getClass().getMethod(
+                method_name,
+                array([Boolean.TYPE], Class)
+            )
+            method.invoke(actuator, array([value], Object))
+            return True
+        except Exception, e:
+            errors.append("%s(boolean): %s" % (method_name, e))
+    raise Exception("Actuator has no supported boolean state method: %s" %
+        "; ".join(errors))
     return True
 
 
@@ -610,6 +916,94 @@ def check_part_off(nozzle):
         pass
 
 
+def current_time_ms():
+    try:
+        return long(System.currentTimeMillis())
+    except:
+        return 0
+
+
+def copy_config(config):
+    out = {}
+    for key in config:
+        out[key] = config[key]
+    return out
+
+
+def machine_from_actuator_or_nozzle(actuator=None, nozzle=None):
+    for obj in [actuator, nozzle]:
+        if obj is None:
+            continue
+        try:
+            head = obj.getHead()
+            if head is not None:
+                machine_obj = head.getMachine()
+                if machine_obj is not None:
+                    return machine_obj
+        except:
+            pass
+    try:
+        return Configuration.get().getMachine()
+    except:
+        return None
+
+
+def wait_after_actuator_change(actuator, nozzle=None, logger=None, settle_ms=None):
+    # Local OpenPnP source inspection:
+    # - Actuator extends HeadMountable, so waitForCompletion() is available.
+    # - MotionPlanner.WaitForUnconditionalCoordination is documented for custom
+    #   actuator G-code that may have moved/queued work even with no pending move.
+    # - ReferenceNozzle.pick()/place() actuate vacuum/blowoff and run configured
+    #   nozzle/nozzle-tip dwell internally; direct Actuator.actuate() does not
+    #   itself mean "dwell complete".
+    waited = False
+    if actuator is not None:
+        try:
+            actuator.waitForCompletion(CompletionType.WaitForUnconditionalCoordination)
+            log_msg(logger, "Actuator completion wait: actuator.waitForCompletion(WaitForUnconditionalCoordination)")
+            waited = True
+        except Exception, e:
+            log_msg(logger, "Actuator completion wait via actuator failed: %s" % e)
+    machine_obj = machine_from_actuator_or_nozzle(actuator, nozzle)
+    if machine_obj is not None:
+        try:
+            machine_obj.getMotionPlanner().waitForCompletion(None, CompletionType.WaitForUnconditionalCoordination)
+            log_msg(logger, "Actuator completion wait: machine motion planner WaitForUnconditionalCoordination")
+            return True
+        except Exception, e:
+            log_msg(logger, "Actuator completion wait via machine planner failed: %s" % e)
+    if waited:
+        return True
+    if settle_ms is None:
+        settle_ms = 50
+    settle_ms = int(settle_ms)
+    if settle_ms > 0:
+        log_msg(logger, "No actuator completion API available; settling explicitly for %d ms" % settle_ms)
+        Thread.sleep(settle_ms)
+    return False
+
+
+def reset_runtime_pick_count():
+    global _RUNTIME_PICK_COUNT
+    _RUNTIME_PICK_COUNT = 0
+
+
+def runtime_pick_extra_dwell_ms(config, base_dwell_ms):
+    global _RUNTIME_PICK_COUNT
+    is_first = _RUNTIME_PICK_COUNT == 0
+    extra = 0
+    if is_first and bool(config.get("first_pick_extra_dwell_enabled", True)):
+        extra = int(base_dwell_ms)
+    if extra < 0:
+        extra = 0
+    return is_first, extra
+
+
+def mark_runtime_pick_success():
+    global _RUNTIME_PICK_COUNT
+    _RUNTIME_PICK_COUNT += 1
+
+
 def clear_nozzle_part_state(nozzle, logger=None):
     # Use only supported public nozzle APIs. Do not call setPart.
     place_succeeded = False
@@ -658,10 +1052,8 @@ def clear_nozzle_part_state(nozzle, logger=None):
 
 
 def safe_nozzle_pick(nozzle, part, config, logger=None):
+    settle_ms = int(config.get("actuator_settle_after_change_ms", 50))
     vacuum = get_vacuum_actuator(nozzle)
-    set_actuator_state(vacuum, True)
-    log_msg(logger, "Vacuum on")
-    Thread.sleep(int(config.get("vacuum_ms", 150)))
     try:
         pick = getattr(nozzle, "pick")
     except:
@@ -670,33 +1062,90 @@ def safe_nozzle_pick(nozzle, part, config, logger=None):
         pick_callable = callable(pick)
     except:
         pick_callable = False
+    base_dwell_ms = get_dwell_ms(nozzle, "pick", config, 150, logger=logger)
+    first_pick, extra_dwell_ms = runtime_pick_extra_dwell_ms(config, base_dwell_ms)
+    total_dwell_ms = base_dwell_ms + extra_dwell_ms
+    dwell_start_ms = current_time_ms()
+    log_msg(logger, "Pick dwell start: base %d extra %d total %d first_pick %s at %d" % (
+        base_dwell_ms, extra_dwell_ms, total_dwell_ms, str(first_pick), dwell_start_ms))
+    pick_error = None
     if pick_callable:
         try:
+            if bool(config.get("manual_vacuum_before_nozzle_pick", False)):
+                log_msg(logger, "Vacuum actuator command at %d" % current_time_ms())
+                set_actuator_state(vacuum, True)
+                log_msg(logger, "Vacuum on")
+                wait_after_actuator_change(vacuum, nozzle, logger,
+                    config.get("actuator_settle_after_change_ms", settle_ms))
+                Thread.sleep(total_dwell_ms)
+                now_ms = current_time_ms()
+                log_msg(logger, "Pick dwell end: total %d elapsed %d at %d" % (
+                    total_dwell_ms, now_ms - dwell_start_ms, now_ms))
+            else:
+                log_msg(logger, "Vacuum on via nozzle.pick(part, None) at %d" % current_time_ms())
             pick(part, None)
             log_msg(logger, "Nozzle pick(part, None) completed")
         except Throwable, e:
-            log_msg(logger, "Nozzle pick(part, None) failed after vacuum-on: %s" % e)
+            pick_error = e
+            log_msg(logger, "Nozzle pick(part, None) failed after vacuum-on; dwell will still be honored: %s" % e)
         except Exception, e:
-            log_msg(logger, "Nozzle pick(part, None) failed after vacuum-on: %s" % e)
+            pick_error = e
+            log_msg(logger, "Nozzle pick(part, None) failed after vacuum-on; dwell will still be honored: %s" % e)
+        wait_after_actuator_change(vacuum, nozzle, logger,
+            config.get("actuator_settle_after_change_ms", settle_ms))
+        if not bool(config.get("manual_vacuum_before_nozzle_pick", False)):
+            if total_dwell_ms > 0:
+                log_msg(logger, "Explicit post-pick dwell: %d ms" % total_dwell_ms)
+                Thread.sleep(total_dwell_ms)
+            now_ms = current_time_ms()
+            log_msg(logger, "Pick dwell end: total %d elapsed %d at %d" % (
+                total_dwell_ms, now_ms - dwell_start_ms, now_ms))
+        if pick_error is not None:
+            raise Exception("Nozzle pick(part, None) failed after dwell: %s" % pick_error)
+    else:
+        log_msg(logger, "Vacuum actuator command at %d" % current_time_ms())
+        set_actuator_state(vacuum, True)
+        log_msg(logger, "Vacuum on")
+        wait_after_actuator_change(vacuum, nozzle, logger,
+            config.get("actuator_settle_after_change_ms", settle_ms))
+        Thread.sleep(total_dwell_ms)
+        now_ms = current_time_ms()
+        log_msg(logger, "Pick dwell end: total %d elapsed %d at %d" % (
+            total_dwell_ms, now_ms - dwell_start_ms, now_ms))
     check_part_on(nozzle)
+    mark_runtime_pick_success()
+    log_msg(logger, "Post-pick lift allowed at %d" % current_time_ms())
     return True
 
 
 def safe_nozzle_release(nozzle, config, logger=None):
-    vacuum = get_vacuum_actuator(nozzle)
-    set_actuator_state(vacuum, False)
-    log_msg(logger, "Vacuum off")
-    blowoff = get_blowoff_actuator(nozzle)
-    use_blowoff = config.get("use_blowoff", config.get("enable_blowoff", True))
-    if not bool(use_blowoff):
-        log_msg(logger, "Blowoff skipped by config")
-    elif blowoff is not None:
-        set_actuator_state(blowoff, True)
-        log_msg(logger, "Blowoff on")
-        Thread.sleep(int(config.get("blowoff_ms", 120)))
-        set_actuator_state(blowoff, False)
-        log_msg(logger, "Blowoff off")
-    clear_nozzle_part_state(nozzle, logger)
+    place_error = None
+    try:
+        place = getattr(nozzle, "place")
+    except:
+        place = None
+    try:
+        place_callable = callable(place)
+    except:
+        place_callable = False
+
+    if place_callable:
+        try:
+            log_msg(logger, "Release via nozzle.place(); OpenPnP owns vacuum/N2 sequence")
+            place()
+            log_msg(logger, "Nozzle place() completed")
+        except Throwable, e:
+            place_error = "Nozzle place() failed: %s" % e
+            log_msg(logger, place_error)
+        except Exception, e:
+            place_error = "Nozzle place() failed: %s" % e
+            log_msg(logger, place_error)
+    else:
+        log_msg(logger, "Release without nozzle.place(); vacuum off fallback only")
+        vacuum = get_vacuum_actuator(nozzle)
+        set_actuator_state(vacuum, False)
+        log_msg(logger, "Vacuum off")
+
     check_part_off(nozzle)
     try:
         get_part = getattr(nozzle, "getPart")
@@ -710,6 +1159,8 @@ def safe_nozzle_release(nozzle, config, logger=None):
         part = get_part()
         if part is not None:
             raise Exception("Nozzle still reports part on nozzle after release")
+    if place_error is not None:
+        log_msg(logger, "Release actuator sequence completed after place warning")
     return True
 
 
@@ -736,7 +1187,9 @@ def capture_top_pipeline(camera, nozzle, part, config, logger=None):
     camera.settleAndCapture()
     pipeline.process()
 
-    result = pipeline.getResult(config["result_stage"])
+    stage_name = config["result_stage"]
+    publish_pipeline_debug_image(config, pipeline, stage_name, logger=logger)
+    result = pipeline.getResult(stage_name)
     if result is None:
         raise Exception("Pipeline result shape wrong")
     model = result.getModel()
@@ -778,26 +1231,184 @@ def capture_top_pipeline(camera, nozzle, part, config, logger=None):
     }
 
 
-def find_artifact_top(camera, nozzle, part, nominal_loc, config, logger=None):
-    nominal_loc = nominal_loc.convertToUnits(LengthUnit.Millimeters)
-    radius = float(config["search_radius_mm"])
-    step = float(config["search_step_mm"])
+def add_unique_offset(offsets, seen, x, y, radius):
+    if math.sqrt(x * x + y * y) > radius + 0.000001:
+        return
+    key = (int(round(x * 1000000.0)), int(round(y * 1000000.0)))
+    if key in seen:
+        return
+    seen[key] = True
+    offsets.append((float(x), float(y)))
+
+
+def normalize_artifact_search_mode(mode):
+    mode = str(mode)
+    if mode == "radial":
+        return "spiral"
+    return mode
+
+
+def normalize_search_radius_step(radius_mm, step_mm):
+    radius = float(radius_mm)
+    step = float(step_mm)
+    if radius < 0.0:
+        radius = 0.0
     if step <= 0.0:
         step = radius if radius > 0.0 else 1.0
+    return radius, step
 
-    offsets = [(0.0, 0.0)]
+
+def normalize_search_angular_step(angular_step_deg):
+    if angular_step_deg is None:
+        angular_step_deg = 45.0
+    angular_step = float(angular_step_deg)
+    if angular_step <= 0.0:
+        angular_step = 45.0
+    return angular_step
+
+
+def generate_spiral_search_offsets(radius_mm, step_mm, angular_step_deg=None, pitch_mm=None):
+    radius, step = normalize_search_radius_step(radius_mm, step_mm)
+    offsets = []
+    seen = {}
+    add_unique_offset(offsets, seen, 0.0, 0.0, radius)
+    if radius <= 0.0:
+        return offsets
+
+    # Archimedean spiral: radius grows by roughly one step per revolution, and
+    # angular advance is clamped so neighboring points stay close.
+    pitch = step
+    if pitch_mm is not None:
+        pitch = float(pitch_mm)
+        if pitch <= 0.0:
+            pitch = step
+    theta = 0.0
+    min_delta = math.radians(10.0)
+    max_delta = math.radians(60.0)
+    while True:
+        r = pitch * theta / (2.0 * math.pi)
+        if r > radius + 0.000001:
+            break
+        if r > 0.000001:
+            add_unique_offset(offsets, seen, r * math.cos(theta), r * math.sin(theta), radius)
+        delta_theta = step / max(r, step)
+        if delta_theta < min_delta:
+            delta_theta = min_delta
+        if delta_theta > max_delta:
+            delta_theta = max_delta
+        theta += delta_theta
+    return offsets
+
+
+def generate_ring_search_offsets(radius_mm, step_mm, angular_step_deg=None):
+    radius, step = normalize_search_radius_step(radius_mm, step_mm)
+    angular_step = normalize_search_angular_step(angular_step_deg)
+    offsets = []
+    seen = {}
+    add_unique_offset(offsets, seen, 0.0, 0.0, radius)
+    if radius <= 0.0:
+        return offsets
+
+    ring = step
+    while ring <= radius + 0.000001:
+        if angular_step_deg is None:
+            count = int(round((2.0 * math.pi * ring) / step))
+            if count < 8:
+                count = 8
+            angle_step = 360.0 / float(count)
+        else:
+            angle_step = angular_step
+        angle = 0.0
+        while angle < 360.0 - 0.000001:
+            rad = math.radians(angle)
+            add_unique_offset(offsets, seen, ring * math.cos(rad), ring * math.sin(rad), radius)
+            angle += angle_step
+        ring += step
+    return offsets
+
+
+def generate_cardinal_first_search_offsets(radius_mm, step_mm, angular_step_deg=None):
+    radius, step = normalize_search_radius_step(radius_mm, step_mm)
+    angular_step = normalize_search_angular_step(angular_step_deg)
+    offsets = []
+    seen = {}
+    add_unique_offset(offsets, seen, 0.0, 0.0, radius)
+    if radius <= 0.0:
+        return offsets
+
+    ring = step
+    while ring <= radius + 0.000001:
+        for x, y in [(ring, 0.0), (-ring, 0.0), (0.0, ring), (0.0, -ring)]:
+            add_unique_offset(offsets, seen, x, y, radius)
+        angle = angular_step
+        while angle < 360.0 - 0.000001:
+            rad = math.radians(angle)
+            add_unique_offset(offsets, seen, ring * math.cos(rad), ring * math.sin(rad), radius)
+            angle += angular_step
+        ring += step
+    return offsets
+
+
+def generate_raster_search_offsets(radius_mm, step_mm):
+    radius, step = normalize_search_radius_step(radius_mm, step_mm)
+    offsets = []
+    seen = {}
+    add_unique_offset(offsets, seen, 0.0, 0.0, radius)
     y = -radius
     while y <= radius + 0.000001:
         x = -radius
         while x <= radius + 0.000001:
             if abs(x) > 0.000001 or abs(y) > 0.000001:
-                offsets.append((x, y))
+                add_unique_offset(offsets, seen, x, y, radius)
             x += step
         y += step
+    return offsets
+
+
+def generate_artifact_search_offsets(radius_mm, step_mm, mode, angular_step_deg=None, spiral_pitch_mm=None):
+    mode = normalize_artifact_search_mode(mode)
+    if mode == "spiral":
+        return generate_spiral_search_offsets(radius_mm, step_mm, angular_step_deg, spiral_pitch_mm)
+    if mode == "rings":
+        return generate_ring_search_offsets(radius_mm, step_mm, angular_step_deg)
+    if mode == "cardinal_first":
+        return generate_cardinal_first_search_offsets(radius_mm, step_mm, angular_step_deg)
+    if mode == "raster_legacy":
+        return generate_raster_search_offsets(radius_mm, step_mm)
+    raise Exception("Unsupported artifact_search_mode: %s" % mode)
+
+
+def find_artifact_top(camera, nozzle, part, nominal_loc, config, logger=None):
+    nominal_loc = nominal_loc.convertToUnits(LengthUnit.Millimeters)
+    requested_mode = str(config.get("artifact_search_mode", "spiral"))
+    mode = normalize_artifact_search_mode(requested_mode)
+    radius = float(config.get("artifact_search_radius_mm", config.get("search_radius_mm", 5.0)))
+    step = float(config.get("artifact_search_step_mm", config.get("search_step_mm", 1.0)))
+    angular_step = config.get("artifact_search_angular_step_deg")
+    spiral_pitch = config.get("artifact_search_spiral_pitch_mm")
+    offsets = generate_artifact_search_offsets(radius, step, mode, angular_step, spiral_pitch)
+    if config.get("artifact_search_max_points") is not None:
+        max_points = int(config["artifact_search_max_points"])
+        if max_points > 0 and len(offsets) > max_points:
+            offsets = offsets[:max_points]
+    use_safe_z_each_point = bool(config.get("artifact_search_use_safe_z_each_point", True))
+    log_msg(logger, "Artifact search setup: requested_mode %s mode %s radius %.4f step %.4f angular_step %s spiral_pitch %s points %d safe_z_each_point %s" % (
+        requested_mode, mode, radius, step, str(angular_step), str(spiral_pitch), len(offsets), str(use_safe_z_each_point)))
+    preview_count = len(offsets)
+    if preview_count > 20:
+        preview_count = 20
+    for preview_index in range(preview_count):
+        px, py = offsets[preview_index]
+        pr = math.sqrt(px * px + py * py)
+        log_msg(logger, "Artifact search offset preview %d/%d: X %.4f Y %.4f R %.4f" % (
+            preview_index + 1, preview_count, px, py, pr))
 
     last_error = None
-    for dx, dy in offsets:
-        log_msg(logger, "Artifact search offset start: X %.4f Y %.4f" % (dx, dy))
+    direct_search_ready = False
+    for index in range(len(offsets)):
+        dx, dy = offsets[index]
+        log_msg(logger, "Artifact search offset %d/%d start: mode %s X %.4f Y %.4f" % (
+            index + 1, len(offsets), mode, dx, dy))
         target = mm_loc(
             nominal_loc.getX() + dx,
             nominal_loc.getY() + dy,
@@ -808,7 +1419,17 @@ def find_artifact_top(camera, nozzle, part, nominal_loc, config, logger=None):
         log_msg(logger, "Top camera focal part height: %.6f" % float(config["part_height_mm"]))
         log_msg(logger, "Top camera focal target: %s" % loc_to_log(target))
         try:
-            move_safe(camera, target)
+            if use_safe_z_each_point or not direct_search_ready:
+                move_safe(camera, target)
+                direct_search_ready = not use_safe_z_each_point
+            else:
+                try:
+                    move_direct(camera, target)
+                except Exception, direct_error:
+                    log_msg(logger, "Artifact search direct move failed; retrying this point with safe-Z: %s" % direct_error)
+                    direct_search_ready = False
+                    use_safe_z_each_point = True
+                    move_safe(camera, target)
             actual_camera = get_movable_location(camera)
             log_msg(logger, "Top camera actual before capture: %s" % loc_to_log(actual_camera))
         except Exception, e:
@@ -817,10 +1438,12 @@ def find_artifact_top(camera, nozzle, part, nominal_loc, config, logger=None):
             found = capture_top_pipeline(camera, nozzle, part, config, logger=logger)
         except Exception, e:
             last_error = e
-            log_msg(logger, "Artifact search offset failed: X %.4f Y %.4f: %s" % (dx, dy, e))
+            log_msg(logger, "Artifact search offset %d/%d failed: X %.4f Y %.4f: %s" % (
+                index + 1, len(offsets), dx, dy, e))
             continue
         found["search_offset_mm"] = {"x": dx, "y": dy}
         found["camera_location"] = loc_to_dict(target)
+        found["search_mode"] = mode
         log_msg(logger, "Artifact search offset succeeded: X %.4f Y %.4f angle %.4f" % (
             dx, dy, float(found["artifact_angle_deg"])))
         return found
@@ -829,28 +1452,28 @@ def find_artifact_top(camera, nozzle, part, nominal_loc, config, logger=None):
 
 
 def pick_artifact_from_storage(nozzle, part, center_loc, config, angle_deg=0.0, safe_move=True, logger=None):
+    config = copy_pick_z_extra_config(copy_config(config), config)
+    log_msg(logger, "Pick Z_EXTRA path enabled: %s" % str(bool(config.get("enable_pick_z_extra", False))))
     storage_pose = pose_from_config(config["storage_location"])
     post_pick_lift_mm = float(config.get("post_pick_lift_mm", 2.0))
     transfer_z_mode = config.get("transfer_z_mode", "relative")
     target = nozzle_target_for_xy(nozzle, center_loc, storage_pose, config, angle_deg)
-    rotation_speed = empty_nozzle_rotation_speed(config)
-    rotated = rotate_nozzle_lifted_unwrapped(nozzle, target.getRotation(), logger=logger, speed=rotation_speed)
-    target = nozzle_target_for_xy(nozzle, center_loc, storage_pose, config, rotated.getRotation())
-    before_descend = get_movable_location(nozzle)
     expected_z = float(storage_pose.getZ()) + float(config["part_height_mm"])
-    log_msg(logger, "Pick pre-descend nozzle readback/DRO: %s" % loc_to_log(before_descend))
     log_msg(logger, "Pick commanded target: %s" % loc_to_log(target))
     log_msg(logger, "Pick computed storage base Z: %.6f" % float(storage_pose.getZ()))
     log_msg(logger, "Pick part height: %.6f" % float(config["part_height_mm"]))
     log_msg(logger, "Pick expected target Z: storage base Z %.6f + part height %.6f = %.6f" % (
         float(storage_pose.getZ()), float(config["part_height_mm"]), expected_z))
+    log_msg(logger, "Pick nominal target Z: %.6f" % float(target.getZ()))
     log_msg(logger, "Pick target Z: storage base z %.4f + part_height_mm %.4f = z %.4f" % (
         float(storage_pose.getZ()), float(config["part_height_mm"]), float(target.getZ())))
     log_msg(logger, "Pick descend target: %s" % loc_to_dict(target))
     try:
         if safe_move:
+            log_msg(logger, "Pick descend safe move uses OpenPnP safe-Z planner speed settings")
             move_safe(nozzle, target)
         else:
+            log_msg(logger, "Pick descend direct move uses OpenPnP default motion")
             move_direct(nozzle, target)
     except Exception, e:
         raise Exception("Motion failure: %s" % e)
@@ -865,18 +1488,26 @@ def pick_artifact_from_storage(nozzle, part, center_loc, config, angle_deg=0.0, 
             z_error, float(config.get("z_readback_tolerance_mm", 0.05))))
 
     try:
+        z_extra_result = apply_pick_z_extra(nozzle, config, logger=logger)
+    except Exception, e:
+        raise Exception("Motion failure: %s" % e)
+
+    try:
         safe_nozzle_pick(nozzle, part, config, logger=logger)
     except Exception, e:
         raise Exception("Pick failed: %s" % e)
 
     try:
         before_lift = get_movable_location(nozzle)
-        speed = held_die_speed(config)
-        log_msg(logger, "Held-die speed active for post-pick lift: %.6f" % float(speed))
         if str(transfer_z_mode) == "safe_z":
-            lifted = lift_nozzle_to_safe_z(nozzle, config, logger=None, speed=speed)
+            log_msg(logger, "Post-pick safe-Z lift uses OpenPnP default motion")
+            lifted = lift_nozzle_to_safe_z(nozzle, config, logger=None)
+        elif post_pick_lift_mm <= 0.0:
+            lifted = before_lift
+            log_msg(logger, "Post-pick lift skipped; next OpenPnP move owns Z handling")
         else:
-            lifted = lift_nozzle_relative(nozzle, post_pick_lift_mm, logger=None, speed=speed)
+            log_msg(logger, "Post-pick relative lift uses OpenPnP default motion")
+            lifted = lift_nozzle_relative(nozzle, post_pick_lift_mm, logger=None)
         log_msg(logger, "Post-pick lift: old Z %.6f new Z %.6f" % (
             float(before_lift.getZ()), float(lifted.getZ())))
     except Exception, e:
@@ -884,6 +1515,10 @@ def pick_artifact_from_storage(nozzle, part, center_loc, config, angle_deg=0.0, 
 
     return {
         "pick_target": loc_to_dict(target),
+        "pick_nominal_target": loc_to_dict(target),
+        "pick_z_extra": z_extra_result,
+        "pick_z_extra_target": z_extra_result["target_location"],
+        "pick_actual_contact_target": z_extra_result["target_location"],
         "pick_angle_requested_deg": float(angle_deg),
         "pick_angle_commanded_deg": float(target.getRotation()),
         "post_pick_lift_location": loc_to_dict(lifted),
@@ -891,13 +1526,25 @@ def pick_artifact_from_storage(nozzle, part, center_loc, config, angle_deg=0.0, 
     }
 
 
-def place_artifact_to_cal_area(nozzle, part, target_center_loc, config, angle_deg=0.0, safe_move=True, logger=None):
+def place_artifact_to_cal_area(nozzle, part, target_center_loc, config, angle_deg=0.0,
+        safe_move=True, logger=None, separate_pairwise_180=False):
+    has_pick_z_extra_keys = False
+    for key in ["Z_EXTRA", "z_extra", "pick_z_extra_mm"]:
+        if key in config:
+            has_pick_z_extra_keys = True
+            break
+    config = disable_pick_z_extra_config(copy_config(config))
+    log_msg(logger, "Place Z_EXTRA path enabled: %s" % str(bool(config.get("enable_pick_z_extra", False))))
+    if has_pick_z_extra_keys:
+        log_msg(logger, "Place path ignoring pick-only Z_EXTRA keys")
     cal_pose = pose_from_config(config["calibration_location"])
     post_place_lift_mm = float(config.get("post_place_lift_mm", 2.0))
     transfer_z_mode = config.get("transfer_z_mode", "relative")
-    transfer_speed = None
-    if nozzle_has_part(nozzle):
-        transfer_speed = held_die_speed(config)
+    final_storage_assert_location = config.get("final_storage_assert_location")
+    final_storage_assert_tolerance = float(config.get(
+        "storage_return_target_assert_tolerance_mm",
+        config.get("final_storage_target_tolerance_mm",
+            config.get("final_storage_assert_tolerance_mm", 0.001))))
     target = nozzle_target_for_xy(nozzle, target_center_loc, cal_pose, config, angle_deg)
     intended_x = float(target.getX())
     intended_y = float(target.getY())
@@ -907,68 +1554,73 @@ def place_artifact_to_cal_area(nozzle, part, target_center_loc, config, angle_de
     log_msg(logger, "Place target Z: calibration base z %.4f + part_height_mm %.4f = z %.4f" % (
         float(cal_pose.getZ()), float(config["part_height_mm"]), intended_z))
     try:
-        before_rotation = get_movable_location(nozzle)
-        log_msg(logger, "Before held rotation readback: %s" % loc_to_log(before_rotation))
+        before_transfer = get_movable_location(nozzle)
+        log_msg(logger, "Before place move readback: %s" % loc_to_log(before_transfer))
         log_msg(logger, "Intended place target: %s" % intended_place_target)
-        if transfer_speed is not None:
-            log_msg(logger, "Held-die speed active for rotation: %.6f" % float(transfer_speed))
-        after_rotation = rotate_nozzle_lifted_unwrapped(nozzle, intended_r, logger=logger, speed=transfer_speed)
-        actual_rotation = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
-        rotation_compensation_dx_mm = float(after_rotation.getX()) - float(before_rotation.getX())
-        rotation_compensation_dy_mm = float(after_rotation.getY()) - float(before_rotation.getY())
+        if safe_move and separate_pairwise_180:
+            log_msg(logger, "Pairwise 180 place uses separate safe-Z rotation and XY moves")
+            move_pairwise_180_at_safe_z(nozzle, target, logger=logger)
+        elif safe_move:
+            log_msg(logger, "Place move safe-Z uses OpenPnP planner default motion")
+            move_safe(nozzle, target)
+        else:
+            log_msg(logger, "Place move direct uses OpenPnP default motion")
+            move_direct(nozzle, target)
+        after_transfer = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
+        rotation_compensation_dx_mm = float(after_transfer.getX()) - float(before_transfer.getX())
+        rotation_compensation_dy_mm = float(after_transfer.getY()) - float(before_transfer.getY())
         rotation_compensation_dr_deg = normalize_rotation(
-            float(after_rotation.getRotation()) - float(before_rotation.getRotation()))
+            float(after_transfer.getRotation()) - float(before_transfer.getRotation()))
         rotation_error = normalize_rotation(
-            float(actual_rotation.getRotation()) - float(intended_r))
-        log_msg(logger, "After held rotation readback: %s" % loc_to_log(after_rotation))
-        log_msg(logger, "Rotation-induced delta: X %.6f Y %.6f R %.6f" % (
+            float(after_transfer.getRotation()) - float(intended_r))
+        log_msg(logger, "After place move readback: %s" % loc_to_log(after_transfer))
+        log_msg(logger, "Place move delta: X %.6f Y %.6f R %.6f" % (
             rotation_compensation_dx_mm, rotation_compensation_dy_mm, rotation_compensation_dr_deg))
-        log_msg(logger, "Held-die rotation readback: commanded %.6f actual %.6f error %.6f" % (
-            intended_r, float(actual_rotation.getRotation()), rotation_error))
+        log_msg(logger, "Place rotation readback: commanded %.6f actual %.6f error %.6f" % (
+            intended_r, float(after_transfer.getRotation()), rotation_error))
         if abs(rotation_error) > float(config.get("held_die_rotation_tolerance_deg", 0.5)):
             raise Exception("Held-die rotation readback error %.6f exceeds tolerance %.6f" % (
                 rotation_error, float(config.get("held_die_rotation_tolerance_deg", 0.5))))
-        if transfer_speed is not None:
-            log_msg(logger, "Held-die speed active for lifted XY: %.6f" % float(transfer_speed))
-        current_after_rotation = get_movable_location(nozzle)
-        dx_to_target = intended_x - float(current_after_rotation.getX())
-        dy_to_target = intended_y - float(current_after_rotation.getY())
+        dx_to_target = intended_x - float(after_transfer.getX())
+        dy_to_target = intended_y - float(after_transfer.getY())
         xy_move_mag = math.sqrt(dx_to_target * dx_to_target + dy_to_target * dy_to_target)
-        skip_xy_threshold = float(config.get("held_die_skip_xy_move_below_mm", 0.010))
-        if transfer_speed is not None and xy_move_mag <= skip_xy_threshold:
-            log_msg(logger, "Held-die lifted XY move skipped: delta %.6f below threshold %.6f" % (
-                xy_move_mag, skip_xy_threshold))
-        else:
-            move_nozzle_xy_lifted(nozzle, intended_x, intended_y, logger=logger, speed=transfer_speed)
-        before_lower = get_movable_location(nozzle)
-        lower_target = mm_loc(
-            before_lower.getX(),
-            before_lower.getY(),
-            intended_z,
-            before_lower.getRotation(),
-        )
+        log_msg(logger, "Place move residual XY delta: %.6f" % xy_move_mag)
+        lower_target = after_transfer
         expected_z = float(cal_pose.getZ()) + float(config["part_height_mm"])
-        log_msg(logger, "Place pre-lower nozzle readback/DRO: %s" % loc_to_log(before_lower))
-        log_msg(logger, "After lifted XY handling readback: %s" % loc_to_log(before_lower))
-        log_msg(logger, "Lower target readback/command: readback %s command %s" % (
-            loc_to_log(before_lower), loc_to_log(lower_target)))
-        log_msg(logger, "Place commanded lower target: %s" % loc_to_log(lower_target))
+        log_msg(logger, "Place commanded target: %s" % loc_to_log(target))
         log_msg(logger, "Place computed calibration base Z: %.6f" % float(cal_pose.getZ()))
         log_msg(logger, "Place part height: %.6f" % float(config["part_height_mm"]))
         log_msg(logger, "Place expected target Z: calibration base Z %.6f + part height %.6f = %.6f" % (
             float(cal_pose.getZ()), float(config["part_height_mm"]), expected_z))
-        log_msg(logger, "Place lower target: %s" % loc_to_dict(lower_target))
-        if transfer_speed is not None:
-            log_msg(logger, "Held-die speed active for place lower: %.6f" % float(transfer_speed))
-        lowered = lower_nozzle_to(nozzle, intended_z, logger=logger, speed=transfer_speed)
-        actual = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
-        z_error = float(actual.getZ()) - intended_z
-        log_msg(logger, "Place lower actual readback/DRO: %s" % loc_to_log(actual))
-        log_msg(logger, "Place lower Z readback: commanded %.6f actual %.6f error %.6f" % (
-            intended_z, float(actual.getZ()), z_error))
+        z_error = float(after_transfer.getZ()) - intended_z
+        log_msg(logger, "Place actual readback/DRO: %s" % loc_to_log(after_transfer))
+        log_msg(logger, "Place Z readback: commanded %.6f actual %.6f error %.6f" % (
+            intended_z, float(after_transfer.getZ()), z_error))
         if abs(z_error) > float(config.get("z_readback_tolerance_mm", 0.05)):
-            raise Exception("Place lower Z readback error %.6f exceeds tolerance %.6f" % (
+            raise Exception("Place Z readback error %.6f exceeds tolerance %.6f" % (
                 z_error, float(config.get("z_readback_tolerance_mm", 0.05))))
+        if final_storage_assert_location is not None:
+            configured_storage = pose_from_config(final_storage_assert_location)
+            storage_dx = intended_x - float(configured_storage.getX())
+            storage_dy = intended_y - float(configured_storage.getY())
+            actual_storage_dx = float(lower_target.getX()) - float(configured_storage.getX())
+            actual_storage_dy = float(lower_target.getY()) - float(configured_storage.getY())
+            log_msg(logger, "Final storage target assertion: commanded X %.6f Y %.6f actual X %.6f Y %.6f configured X %.6f Y %.6f commanded delta X %.6f Y %.6f actual delta X %.6f Y %.6f tolerance %.6f" % (
+                intended_x, intended_y,
+                float(lower_target.getX()), float(lower_target.getY()),
+                float(configured_storage.getX()), float(configured_storage.getY()),
+                storage_dx, storage_dy,
+                actual_storage_dx, actual_storage_dy,
+                final_storage_assert_tolerance))
+            if (abs(storage_dx) > final_storage_assert_tolerance
+                    or abs(storage_dy) > final_storage_assert_tolerance
+                    or abs(actual_storage_dx) > final_storage_assert_tolerance
+                    or abs(actual_storage_dy) > final_storage_assert_tolerance):
+                log_msg(logger, "Warning: final storage target assertion exceeded before release; continuing to release: commanded X %.6f Y %.6f actual X %.6f Y %.6f configured X %.6f Y %.6f tolerance %.6f" % (
+                    intended_x, intended_y,
+                    float(lower_target.getX()), float(lower_target.getY()),
+                    float(configured_storage.getX()), float(configured_storage.getY()),
+                    final_storage_assert_tolerance))
     except Exception, e:
         raise Exception("Motion failure: %s" % e)
 
@@ -979,11 +1631,12 @@ def place_artifact_to_cal_area(nozzle, part, target_center_loc, config, angle_de
 
     try:
         before_lift = get_movable_location(nozzle)
-        speed = normal_motion_speed(config)
         if str(transfer_z_mode) == "safe_z":
-            lifted = lift_nozzle_to_safe_z(nozzle, config, logger=None, speed=speed)
+            log_msg(logger, "Post-place safe-Z lift uses OpenPnP default motion")
+            lifted = lift_nozzle_to_safe_z(nozzle, config, logger=None)
         else:
-            lifted = lift_nozzle_relative(nozzle, post_place_lift_mm, logger=None, speed=speed)
+            log_msg(logger, "Post-place relative lift uses OpenPnP default motion")
+            lifted = lift_nozzle_relative(nozzle, post_place_lift_mm, logger=None)
         log_msg(logger, "Post-place lift: old Z %.6f new Z %.6f" % (
             float(before_lift.getZ()), float(lifted.getZ())))
     except Exception, e:
@@ -993,13 +1646,13 @@ def place_artifact_to_cal_area(nozzle, part, target_center_loc, config, angle_de
         "place_target": loc_to_dict(lower_target),
         "place_angle_requested_deg": float(angle_deg),
         "place_angle_commanded_deg": intended_r,
-        "rotation_readback_before": loc_to_dict(before_rotation),
-        "rotation_readback_after": loc_to_dict(after_rotation),
+        "rotation_readback_before": loc_to_dict(before_transfer),
+        "rotation_readback_after": loc_to_dict(after_transfer),
         "rotation_compensation_dx_mm": rotation_compensation_dx_mm,
         "rotation_compensation_dy_mm": rotation_compensation_dy_mm,
         "rotation_compensation_dr_deg": rotation_compensation_dr_deg,
         "intended_place_target": intended_place_target,
-        "actual_place_xy_before_lower": loc_to_dict(before_lower),
+        "actual_place_xy_before_lower": loc_to_dict(after_transfer),
         "post_place_lift_location": loc_to_dict(lifted),
         "transfer_z_mode": str(transfer_z_mode),
     }
@@ -1008,22 +1661,62 @@ def place_artifact_to_cal_area(nozzle, part, target_center_loc, config, angle_de
 def return_artifact_to_known_pose(nozzle, camera, part, current_loc, config):
     storage_pose = pose_from_config(config["storage_location"])
     current_rot = current_loc.convertToUnits(LengthUnit.Millimeters).getRotation()
-    pick_artifact_from_storage(nozzle, part, current_loc, {
+    storage_return_target_assert_tolerance = config.get(
+        "storage_return_target_assert_tolerance_mm",
+        config.get("final_storage_target_tolerance_mm",
+            config.get("final_storage_assert_tolerance_mm", 0.001)))
+    return_pick_config = copy_pick_z_extra_config({
         "storage_location": config["calibration_location"],
         "part_height_mm": config["part_height_mm"],
         "vacuum_ms": config.get("vacuum_ms", 150),
+        "force_fallback_dwell": config.get("force_fallback_dwell", False),
         "post_pick_lift_mm": config.get("post_pick_lift_mm", 2.0),
         "transfer_z_mode": "safe_z",
         "safe_travel_z": safe_travel_z_for_config(config),
-    }, current_rot)
+        "calibration_motion_speed": normal_motion_speed(config),
+        "normal_motion_speed": normal_motion_speed(config),
+        "pairwise_motion_speed": normal_motion_speed(config),
+        "held_die_motion_speed": normal_motion_speed(config),
+    }, config)
+    pick_artifact_from_storage(nozzle, part, current_loc, return_pick_config, current_rot)
     return place_artifact_to_cal_area(nozzle, part, storage_pose, {
         "calibration_location": config["storage_location"],
         "part_height_mm": config["part_height_mm"],
         "blowoff_ms": config.get("blowoff_ms", 120),
+        "force_fallback_dwell": config.get("force_fallback_dwell", False),
         "post_place_lift_mm": config.get("post_place_lift_mm", 2.0),
         "transfer_z_mode": "safe_z",
         "safe_travel_z": safe_travel_z_for_config(config),
+        "calibration_motion_speed": normal_motion_speed(config),
+        "normal_motion_speed": normal_motion_speed(config),
+        "pairwise_motion_speed": normal_motion_speed(config),
+        "held_die_motion_speed": normal_motion_speed(config),
+        "final_storage_assert_location": config["storage_location"],
+        "storage_return_target_assert_tolerance_mm": storage_return_target_assert_tolerance,
+        "final_storage_assert_tolerance_mm": storage_return_target_assert_tolerance,
     }, storage_pose.getRotation())
+
+
+def artifact_measurement_summary(found):
+    if found is None:
+        return {
+            "final_artifact_pose": None,
+            "final_artifact_pose_mm": None,
+            "final_artifact_angle_deg": None,
+            "final_nozzle_pick_target_mm": None,
+            "final_search_offset_mm": None,
+            "final_camera_location_mm": None,
+        }
+    center = found.get("center_location")
+    pick = detection_pick_location(found)
+    return {
+        "final_artifact_pose": loc_to_dict(center),
+        "final_artifact_pose_mm": loc_to_dict(center),
+        "final_artifact_angle_deg": float(found["artifact_angle_deg"]),
+        "final_nozzle_pick_target_mm": loc_to_dict(pick),
+        "final_search_offset_mm": found.get("search_offset_mm"),
+        "final_camera_location_mm": found.get("camera_location"),
+    }
 
 
 def result_failure(message):
@@ -1036,6 +1729,11 @@ def result_failure(message):
         "angles_deg": [],
         "per_angle_records": [],
         "final_artifact_pose": None,
+        "final_artifact_pose_mm": None,
+        "final_artifact_angle_deg": None,
+        "final_nozzle_pick_target_mm": None,
+        "final_search_offset_mm": None,
+        "final_camera_location_mm": None,
     }
 
 
@@ -1045,9 +1743,17 @@ def solve_head_offset(config, nozzle=None, camera=None, machine_obj=None, part=N
 
     try:
         log_msg(logger, "Head offset solver start")
+        reset_runtime_pick_count()
         config.setdefault("pairwise_180_direction", 1.0)
-        config.setdefault("held_die_motion_speed", 0.60)
-        config.setdefault("empty_nozzle_rotation_speed", 0.20)
+        config.setdefault("calibration_motion_speed", config.get("normal_motion_speed", 1.0))
+        config.setdefault("pairwise_motion_speed", config.get("held_die_motion_speed", 0.60))
+        config.setdefault("normal_motion_speed", config.get("calibration_motion_speed", 1.0))
+        config.setdefault("held_die_motion_speed", config.get("pairwise_motion_speed", 0.60))
+        config.setdefault("actuator_settle_after_change_ms", 50)
+        config.setdefault("first_pick_extra_dwell_ms", 250)
+        config.setdefault("first_pick_extra_dwell_enabled", True)
+        config.setdefault("force_fallback_dwell", False)
+        log_motion_speed_config(config, logger=logger)
         if len(angles) == 0:
             raise Exception("No pairwise angles configured")
         if machine_obj is None:
@@ -1073,8 +1779,10 @@ def solve_head_offset(config, nozzle=None, camera=None, machine_obj=None, part=N
 
         storage_pose = pose_from_config(config["storage_location"])
         calibration_pose = pose_from_config(config["calibration_location"])
-        storage_transfer_config = config_with_transfer_z_mode(config, "safe_z")
-        pairwise_transfer_config = config_with_transfer_z_mode(config, "relative")
+        storage_transfer_config = config_with_transfer_speed(
+            config, "safe_z", log_resolved_motion_speed(config, "normal", 1.0, logger=logger))
+        pairwise_transfer_config = config_with_transfer_speed(
+            config, "relative", log_resolved_motion_speed(config, "held_die", 0.60, logger=logger))
 
         log_msg(logger, "Storage artifact search start")
         storage_found = find_artifact_top(camera, nozzle, part, storage_pose, config, logger=logger)
@@ -1097,6 +1805,7 @@ def solve_head_offset(config, nozzle=None, camera=None, machine_obj=None, part=N
         sum_raw_delta_mag_sq = 0.0
         sum_solved_correction_mag_sq = 0.0
         final_artifact_pose = None
+        final_artifact_measurement = None
         pairwise_pass_count = int(config.get("pairwise_pass_count", 1))
         if pairwise_pass_count < 1:
             pairwise_pass_count = 1
@@ -1120,26 +1829,30 @@ def solve_head_offset(config, nozzle=None, camera=None, machine_obj=None, part=N
                 log_msg(logger, "Using top vision camera-only center for measurement/math: %s" % loc_to_log(old_center))
                 pick_angle = float(angle)
                 place_angle = unwrapped_plus_180(pick_angle, config.get("pairwise_180_direction", 1.0))
-                pick_result = pick_artifact_from_storage(nozzle, part, old_pick_target, {
+                pair_pick_config = copy_pick_z_extra_config({
                     "storage_location": config["calibration_location"],
                     "part_height_mm": config["part_height_mm"],
                     "vacuum_ms": config.get("vacuum_ms", 150),
-                    "post_pick_lift_mm": config.get("post_pick_lift_mm", 2.0),
+                    "post_pick_lift_mm": 0.0,
                     "transfer_z_mode": "relative",
                     "safe_travel_z": safe_travel_z_for_config(config),
-                    "held_die_motion_speed": config.get("held_die_motion_speed", 0.60),
-                    "empty_nozzle_rotation_speed": config.get("empty_nozzle_rotation_speed", 0.20),
-                }, pick_angle, logger=logger)
+                    "pairwise_motion_speed": held_die_speed(config),
+                    "held_die_motion_speed": held_die_speed(config),
+                }, config)
+                pick_result = pick_artifact_from_storage(nozzle, part, old_pick_target,
+                    pair_pick_config, pick_angle, logger=logger)
                 # Pairwise correction must place back to old_center. Nominal recentering is housekeeping only and must not enter dx/dy correction math.
                 log_msg(logger, "Pairwise measurement place target is old_center, not nominal center")
                 place_result = place_artifact_to_cal_area(
-                    nozzle, part, old_center, pairwise_transfer_config, place_angle, False, logger=logger)
+                    nozzle, part, old_center, pairwise_transfer_config, place_angle, True,
+                    logger=logger, separate_pairwise_180=True)
 
                 measured = find_artifact_top(camera, nozzle, part,
                     xy_with_base_pose(old_center, calibration_pose), config, logger=logger)
                 new_center = measured["center_location"].convertToUnits(LengthUnit.Millimeters)
                 new_artifact_angle_deg = float(measured["artifact_angle_deg"])
                 final_artifact_pose = loc_to_dict(new_center)
+                final_artifact_measurement = measured
                 dx = new_center.getX() - old_center.getX()
                 dy = new_center.getY() - old_center.getY()
                 raw_delta_mag = math.sqrt(dx * dx + dy * dy)
@@ -1300,22 +2013,25 @@ def solve_head_offset(config, nozzle=None, camera=None, machine_obj=None, part=N
                         recenter_pick_target = detection_pick_location(measured)
                         log_msg(logger, "Using top vision nozzle-pick target for pick: %s" % loc_to_log(recenter_pick_target))
                         log_msg(logger, "Using top vision camera-only center for measurement/math: %s" % loc_to_log(new_center))
-                        pick_artifact_from_storage(nozzle, part, recenter_pick_target, {
+                        recenter_pick_config = copy_pick_z_extra_config({
                             "storage_location": config["calibration_location"],
                             "part_height_mm": config["part_height_mm"],
                             "vacuum_ms": config.get("vacuum_ms", 150),
-                            "post_pick_lift_mm": config.get("post_pick_lift_mm", 2.0),
+                            "post_pick_lift_mm": 0.0,
                             "transfer_z_mode": "relative",
                             "safe_travel_z": safe_travel_z_for_config(config),
-                            "held_die_motion_speed": config.get("held_die_motion_speed", 0.60),
-                            "empty_nozzle_rotation_speed": config.get("empty_nozzle_rotation_speed", 0.20),
-                        }, recenter_pick_angle, logger=logger)
+                            "pairwise_motion_speed": held_die_speed(config),
+                            "held_die_motion_speed": held_die_speed(config),
+                        }, config)
+                        pick_artifact_from_storage(nozzle, part, recenter_pick_target,
+                            recenter_pick_config, recenter_pick_angle, logger=logger)
                         place_artifact_to_cal_area(nozzle, part, nominal_pairwise_center,
-                            pairwise_transfer_config, new_artifact_angle_deg, False, logger=logger)
+                            pairwise_transfer_config, new_artifact_angle_deg, True, logger=logger)
                         recentered = find_artifact_top(camera, nozzle, part, calibration_pose, config, logger=logger)
                         pair_record["recenter_result_center_mm"] = loc_to_dict(recentered["center_location"])
                         pair_record["recenter_result_artifact_angle_deg"] = float(recentered["artifact_angle_deg"])
                         final_artifact_pose = loc_to_dict(recentered["center_location"])
+                        final_artifact_measurement = recentered
                         current_pose = recentered
                         current_center = recentered["center_location"].convertToUnits(LengthUnit.Millimeters)
                         current_artifact_angle_deg = float(recentered["artifact_angle_deg"])
@@ -1379,7 +2095,13 @@ def solve_head_offset(config, nozzle=None, camera=None, machine_obj=None, part=N
         )
         log_msg(logger, "Final proposed head offset: %s" % loc_to_dict(proposed))
 
-        return {
+        final_summary = artifact_measurement_summary(final_artifact_measurement)
+        log_msg(logger, "Final pairwise artifact pose handoff: center %s angle %s pick %s" % (
+            str(final_summary["final_artifact_pose_mm"]),
+            str(final_summary["final_artifact_angle_deg"]),
+            str(final_summary["final_nozzle_pick_target_mm"])))
+
+        result = {
             "ok": True,
             "message": "ok",
             "old_head_offsets_mm": loc_to_dict(old_offsets),
@@ -1401,6 +2123,9 @@ def solve_head_offset(config, nozzle=None, camera=None, machine_obj=None, part=N
             "rejected_pair_records": rejected_pair_records,
             "final_artifact_pose": final_artifact_pose,
         }
+        for key in final_summary:
+            result[key] = final_summary[key]
+        return result
 
     except Exception, e:
         log_msg(logger, "Head offset solver exception: %s" % e)

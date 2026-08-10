@@ -1,0 +1,43 @@
+{
+  "actuator_name": "GlueDispense", 
+  "actuator_settle_ms": 10.0, 
+  "dispense_speed": 0.5, 
+  "dispense_z_offset_mm": 0.1, 
+  "line": {
+    "enabled": true, 
+    "length_mm": 20.0, 
+    "lift_mm": 0.1, 
+    "pitch_mm": 0.5, 
+    "post_trigger_dwell_ms": 10.0
+  }, 
+  "matrix": {
+    "columns": 5, 
+    "enabled": true, 
+    "lift_mm": 3.0, 
+    "offset_x_mm": 5.0, 
+    "pitch_x_mm": 4.0, 
+    "pitch_y_mm": 4.0, 
+    "post_trigger_dwell_ms": 100.0, 
+    "rows": 5
+  }, 
+  "nozzle_name": "Dispense Head", 
+  "origin_location": {
+    "rotation": 0.0, 
+    "x": 279.898, 
+    "y": 331.3658, 
+    "z": 3.0
+  }, 
+  "park_location": {
+    "enabled": false, 
+    "rotation": 0.0, 
+    "x": 30.0, 
+    "y": 40.0, 
+    "z": 25.0
+  }, 
+  "pre_trigger_dwell_ms": 0.0, 
+  "safe_move_mode": "split_direct", 
+  "safe_z_mm": 25.0, 
+  "schema_version": 1, 
+  "travel_speed": 1.0, 
+  "trigger_pulse_ms": 50.0
+}

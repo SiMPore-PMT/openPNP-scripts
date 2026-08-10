@@ -38,6 +38,10 @@ from lumen_head_offset_solver import (
     config_with_runtime_part_height,
     rotate_nozzle_lifted_unwrapped,
     empty_nozzle_rotation_speed,
+    normal_motion_speed,
+    log_resolved_motion_speed,
+    log_motion_speed_config,
+    publish_pipeline_debug_image,
 )
 
 
@@ -73,7 +77,6 @@ def copy_config_with_overrides(config, overrides):
 
 def move_nozzle_to_command_zero(config, nozzle, logger=None):
     desired_zero = float(config.get("bottom_square_zero_deg", 0.0))
-    speed = config.get("post_pairwise_zero_speed", 0.65)
     current = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
     target_r = normalize_rotation(desired_zero)
     target = mm_loc(
@@ -82,9 +85,9 @@ def move_nozzle_to_command_zero(config, nozzle, logger=None):
         current.getZ(),
         target_r,
     )
-    log_msg(logger, "Post-pairwise nozzle zero restore: old R %.6f target R %.6f speed %.6f" % (
-        float(current.getRotation()), float(target_r), float(speed)))
-    move_direct_speed(nozzle, target, speed)
+    log_msg(logger, "Post-pairwise nozzle zero restore: old R %.6f target R %.6f using OpenPnP default motion" % (
+        float(current.getRotation()), float(target_r)))
+    move_direct_speed(nozzle, target, None)
     final_loc = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
     final_r = float(final_loc.getRotation())
     log_msg(logger, "Post-pairwise nozzle zero restore complete: final R %.6f" % final_r)
@@ -92,6 +95,54 @@ def move_nozzle_to_command_zero(config, nozzle, logger=None):
         raise Exception("Failed to restore nozzle to command zero after pairwise: R %.6f target %.6f" % (
             final_r, target_r))
     return final_loc
+
+
+def clear_nozzle_rotation_mode_offset(nozzle, logger=None, context=""):
+    try:
+        setter = getattr(nozzle, "setRotationModeOffset")
+    except:
+        setter = None
+    try:
+        can_call = setter is not None and callable(setter)
+    except:
+        can_call = False
+    if not can_call:
+        log_msg(logger, "%s rotation mode offset clear skipped; method unavailable" % context)
+        return False
+    setter(None)
+    log_msg(logger, "%s rotation mode offset cleared before zero/calibration" % context)
+    wait_nozzle_still(nozzle)
+    return True
+
+
+def prepare_nozzle_zero_for_builtin_calibration(config, nozzle, logger=None):
+    desired_zero = float(config.get("bottom_square_zero_deg", 0.0))
+    result = {
+        "ok": False,
+        "rotation_mode_offset_cleared": False,
+        "target_rotation_deg": normalize_rotation(desired_zero),
+        "final_rotation_deg": None,
+    }
+    result["rotation_mode_offset_cleared"] = clear_nozzle_rotation_mode_offset(
+        nozzle, logger=logger, context="Pre-built-in")
+    loc = rotate_nozzle_lifted_unwrapped(
+        nozzle,
+        desired_zero,
+        logger=logger,
+        speed=empty_nozzle_rotation_speed(config)
+    )
+    final_r = float(loc.convertToUnits(LengthUnit.Millimeters).getRotation())
+    result["final_rotation_deg"] = final_r
+    error = normalize_rotation(final_r - desired_zero)
+    result["rotation_error_deg"] = error
+    log_msg(logger, "Pre-built-in zero assertion: target R %.6f actual R %.6f error %.6f" % (
+        desired_zero, final_r, error))
+    tolerance = float(config.get("pre_builtin_zero_rotation_tolerance_deg", 0.05))
+    if abs(error) > tolerance:
+        raise Exception("Pre-built-in zero assertion failed: target R %.6f actual R %.6f tolerance %.6f" % (
+            desired_zero, final_r, tolerance))
+    result["ok"] = True
+    return result
 
 
 def get_machine(machine_obj=None):
@@ -268,6 +319,7 @@ def read_square_tip_angle_raw(config, nozzle=None, camera=None, machine_obj=None
         except:
             pass
         pipeline.process()
+        publish_pipeline_debug_image(config, pipeline, stage_name, logger=logger)
 
         try:
             result = pipeline.getResult(stage_name)
@@ -315,7 +367,7 @@ def read_square_tip_angle_with_recovery(config, nozzle, camera, machine_obj, tar
                 float(recovery_target.getY()),
                 float(recovery_target.getRotation()),
                 last_error))
-            move_direct(nozzle, recovery_target)
+            move_direct_speed(nozzle, recovery_target, normal_motion_speed(config))
             try:
                 return read_square_tip_angle_raw(config, nozzle, camera, machine_obj, logger=logger)
             except InvalidSquareReading, e:
@@ -439,7 +491,7 @@ def sample_square_tip_bottom(config, nozzle, camera, machine_obj, base_loc, desi
             base_loc.getZ(),
             base_loc.getRotation(),
         )
-        move_direct(nozzle, target)
+        move_direct_speed(nozzle, target, normal_motion_speed(config))
         try:
             raw_angle = read_square_tip_angle_with_recovery(config, nozzle, camera, machine_obj, target, logger=logger)
         except InvalidSquareReading, e:
@@ -453,7 +505,7 @@ def sample_square_tip_bottom(config, nozzle, camera, machine_obj, base_loc, desi
             )
             log_msg(logger, "Square-tip sample %s validation shift to X %.4f Y %.4f" % (
                 name, target.getX(), target.getY()))
-            move_direct(nozzle, target)
+            move_direct_speed(nozzle, target, normal_motion_speed(config))
             raw_angle = read_square_tip_angle_with_recovery(config, nozzle, camera, machine_obj, target, logger=logger)
         read_loc = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
         error = square_error(raw_angle, desired_zero)
@@ -486,7 +538,7 @@ def read_center_square_error(config, nozzle, camera, machine_obj, base_loc, desi
         float(target.getX()),
         float(target.getY()),
         float(target.getZ())))
-    move_direct(nozzle, target)
+    move_direct_speed(nozzle, target, normal_motion_speed(config))
     raw_angle = read_square_tip_angle_with_recovery(config, nozzle, camera, machine_obj, target, logger=logger)
     read_loc = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
     error = square_error(raw_angle, desired_zero)
@@ -524,7 +576,7 @@ def verify_square_tip_at_command_zero_only(config, nozzle=None, camera=None, mac
 
     log_msg(logger, "%s start" % prefix)
     log_msg(logger, "%s target: %s" % (prefix, loc_to_log(target)))
-    move_direct(nozzle, target)
+    move_direct_speed(nozzle, target, normal_motion_speed(config))
     read_loc = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
     log_msg(logger, "%s actual nozzle: %s" % (prefix, loc_to_log(read_loc)))
 
@@ -591,7 +643,7 @@ def resquare_and_true_zero_after_pairwise(config, nozzle=None, camera=None, mach
         base_loc.getZ(),
         normalize_rotation(desired_zero),
     )
-    move_direct(nozzle, target)
+    move_direct_speed(nozzle, target, normal_motion_speed(config))
     raw_angle, error, sample = read_center_square_error(
         config, nozzle, camera, machine_obj, target, desired_zero, logger=logger)
     result["initial_error_deg"] = error
@@ -617,7 +669,7 @@ def resquare_and_true_zero_after_pairwise(config, nozzle=None, camera=None, mach
             log_msg(logger, "Post-pairwise resquare correction iteration %d current R %.6f error %.6f new R %.6f" % (
                 i + 1, current_r, float(error), new_r))
             target = mm_loc(current.getX(), current.getY(), current.getZ(), new_r)
-            move_direct(nozzle, target)
+            move_direct_speed(nozzle, target, normal_motion_speed(config))
             raw_angle, error, sample = read_center_square_error(
                 config, nozzle, camera, machine_obj, target, desired_zero, logger=logger)
             result["iterations_used"] = i + 1
@@ -647,7 +699,7 @@ def resquare_and_true_zero_after_pairwise(config, nozzle=None, camera=None, mach
                 current.getZ(),
                 normalize_rotation(desired_zero),
             )
-            move_direct(nozzle, zero_target)
+            move_direct_speed(nozzle, zero_target, normal_motion_speed(config))
             raw_angle, error, sample = read_center_square_error(
                 config, nozzle, camera, machine_obj, zero_target, desired_zero, logger=logger)
             result["final_error_deg"] = error
@@ -902,7 +954,7 @@ def verify_square_tip_at_command_zero(config, nozzle, camera, machine_obj, base_
         samples_zero_verify, avg_error_legacy = sample_square_tip_bottom(
             config, nozzle, camera, machine_obj, base_loc, desired_zero, logger=logger)
     else:
-        move_direct(nozzle, base_loc)
+        move_direct_speed(nozzle, base_loc, normal_motion_speed(config))
         raw_angle = read_square_tip_angle_with_recovery(config, nozzle, camera, machine_obj, base_loc, logger=logger)
         read_loc = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
         error = square_error(raw_angle, desired_zero)
@@ -948,8 +1000,8 @@ def square_nozzle_tip_bottom(config, nozzle=None, camera=None, machine_obj=None,
         current.getZ(),
         normalize_rotation(desired_zero),
     )
-    log_msg(logger, "Square-tip parking move uses normal move_direct")
-    move_direct(nozzle, park_target)
+    log_msg(logger, "Square-tip parking move uses calibration motion speed")
+    move_direct_speed(nozzle, park_target, normal_motion_speed(config))
 
     parked = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
     old_rotation = float(parked.getRotation())
@@ -1045,7 +1097,7 @@ def square_nozzle_tip_bottom(config, nozzle=None, camera=None, machine_obj=None,
         target = mm_loc(base_loc.getX(), base_loc.getY(), base_loc.getZ(), new_rotation)
         log_msg(logger, "Square-tip refine correction move: current R %.6f error %.6f sign %.6f new R %.6f" % (
             current_rotation, correction_error, square_angle_sign, new_rotation))
-        move_direct(nozzle, target)
+        move_direct_speed(nozzle, target, normal_motion_speed(config))
 
         current_loc = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
         current_rotation = float(current_loc.getRotation())
@@ -1120,8 +1172,8 @@ def square_nozzle_tip_bottom(config, nozzle=None, camera=None, machine_obj=None,
         normalize_rotation(desired_zero),
     )
     if abs(normalize_rotation(float(current.getRotation()) - desired_zero)) > 0.001:
-        log_msg(logger, "Square-tip post-zero move uses normal move_direct")
-        move_direct(nozzle, zero_target)
+        log_msg(logger, "Square-tip post-zero move uses calibration motion speed")
+        move_direct_speed(nozzle, zero_target, normal_motion_speed(config))
     else:
         log_msg(logger, "Nozzle already at command zero after true-zero; skipping zero move")
     final_loc = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
@@ -1217,6 +1269,7 @@ def event_preflight_before_nozzle_cal(config, nozzle=None, camera=None, machine_
         machine_obj = get_machine(machine_obj)
         nozzle = get_nozzle(machine_obj, nozzle)
         top_camera = get_top_camera(machine_obj)
+        log_motion_speed_config(config, logger=log)
 
         square_tip_skipped = not bool_config(config, "square_tip_in_event", True)
         head_offset_solver_skipped = not bool_config(config, "run_head_offset_solver_in_event", True)
@@ -1275,18 +1328,76 @@ def run_builtin_nozzle_tip_calibration(nozzle):
     return {"ok": True, "tip": tip.getName()}
 
 
-def return_artifact_to_storage(config, nozzle, camera, machine_obj, logger=None):
+def pairwise_start_pose_to_location(starting_artifact_pose, calibration_pose):
+    data = starting_artifact_pose
+    if data is None:
+        return None
+    if hasattr(data, "convertToUnits"):
+        loc = data.convertToUnits(LengthUnit.Millimeters)
+        return mm_loc(loc.getX(), loc.getY(), calibration_pose.getZ(), loc.getRotation())
+    if "final_artifact_pose_mm" in data:
+        data = data["final_artifact_pose_mm"]
+    elif "final_artifact_pose" in data:
+        data = data["final_artifact_pose"]
+    elif "center_location" in data:
+        data = data["center_location"]
+    if data is None:
+        return None
+    return mm_loc(
+        data.get("x", calibration_pose.getX()),
+        data.get("y", calibration_pose.getY()),
+        calibration_pose.getZ(),
+        data.get("rotation", data.get("r", calibration_pose.getRotation())),
+    )
+
+
+def return_artifact_to_storage(config, nozzle, camera, machine_obj, logger=None, starting_artifact_pose=None):
     log_msg(logger, "Artifact return start")
     part = get_part(config, None)
     config = config_with_runtime_part_height(config, part, logger=logger)
     calibration_pose = pose_from_config(config["calibration_location"])
-    storage_pose = pose_from_config(config["storage_location"])
+    configured_storage_pose = pose_from_config(config["storage_location"])
+    final_storage_place_target = configured_storage_pose
+    start_pose_source = "nominal_calibration_pose"
+    search_pose_for_die_on_calibration_board = calibration_pose
+    if starting_artifact_pose is not None:
+        last_pose = pairwise_start_pose_to_location(starting_artifact_pose, calibration_pose)
+        if last_pose is not None:
+            start_pose_source = "last_pairwise_pose"
+            search_pose_for_die_on_calibration_board = last_pose
+            log_msg(logger, "Artifact return using last known pairwise pose")
+        else:
+            log_msg(logger, "Artifact return using nominal calibration pose")
+    else:
+        log_msg(logger, "Artifact return using nominal calibration pose")
+    log_msg(logger, "Configured storage pose: %s" % loc_to_log(configured_storage_pose))
+    log_msg(logger, "Artifact return search pose: %s" % loc_to_log(search_pose_for_die_on_calibration_board))
 
+    # Head offsets have already changed, so the last pairwise nozzle-pick target
+    # is stale. Re-image near the camera-only die pose and compute a fresh
+    # tool-aware nozzle pick target from VisionUtils.
+    return_search_config = config
+    if start_pose_source == "last_pairwise_pose":
+        step = float(config.get("artifact_search_step_mm", config.get("search_step_mm", 1.0)))
+        radius = float(config.get("artifact_search_radius_mm", config.get("search_radius_mm", 5.0)))
+        last_pose_radius = float(config.get(
+            "artifact_return_last_pose_search_radius_mm",
+            min(radius, max(step * 2.0, step))))
+        return_search_config = copy_config_with_overrides(config, {
+            "artifact_search_mode": config.get("artifact_search_mode", "radial"),
+            "artifact_search_radius_mm": last_pose_radius,
+            "artifact_search_step_mm": step,
+        })
+        log_msg(logger, "Artifact return last-pose radial search radius %.4f step %.4f" % (
+            last_pose_radius, step))
     log_msg(logger, "Artifact return re-image start")
-    found = find_artifact_top(camera, nozzle, part, calibration_pose, config, logger=logger)
-    found_pick_target = detection_pick_location(found)
+    found = find_artifact_top(
+        camera, nozzle, part, search_pose_for_die_on_calibration_board,
+        return_search_config, logger=logger)
+    measured_die_pick_target = detection_pick_location(found)
     log_msg(logger, "Artifact return measured center: %s" % loc_to_dict(found["center_location"]))
     log_msg(logger, "Artifact return measured search offset: %s" % found.get("search_offset_mm"))
+    log_msg(logger, "Artifact return measured die pick target: %s" % loc_to_log(measured_die_pick_target))
 
     artifact_angle_deg = normalize_rotation_360(float(found["artifact_angle_deg"]))
     artifact_pick_angle_sign = float(config.get("artifact_pick_angle_sign", -1.0))
@@ -1294,40 +1405,53 @@ def return_artifact_to_storage(config, nozzle, camera, machine_obj, logger=None)
     pick_rotation_deg = normalize_rotation(
         artifact_pick_angle_sign * artifact_angle_deg
         + artifact_pick_angle_offset_deg)
-    place_rotation_deg = float(storage_pose.getRotation())
+    place_rotation_deg = float(configured_storage_pose.getRotation())
     log_msg(logger, "Artifact return measured artifact angle: %.4f" % artifact_angle_deg)
     log_msg(logger, "Artifact return pick angle sign: %.4f" % artifact_pick_angle_sign)
     log_msg(logger, "Artifact return pick angle offset deg: %.4f" % (
         artifact_pick_angle_offset_deg))
     log_msg(logger, "Artifact return pick rotation deg: %.4f" % pick_rotation_deg)
     log_msg(logger, "Artifact return nominal storage target: X %.4f Y %.4f R %.4f" % (
-        float(storage_pose.getX()), float(storage_pose.getY()), float(storage_pose.getRotation())))
+        float(configured_storage_pose.getX()), float(configured_storage_pose.getY()), float(configured_storage_pose.getRotation())))
     log_msg(logger, "Artifact return final place_rotation_deg: %.4f" % place_rotation_deg)
+    log_msg(logger, "Artifact return FINAL storage place target: %s" % loc_to_log(final_storage_place_target))
 
+    return_speed = log_resolved_motion_speed(config, "normal", 1.0, logger=logger)
+    storage_return_target_assert_tolerance = config.get(
+        "storage_return_target_assert_tolerance_mm",
+        config.get("final_storage_target_tolerance_mm",
+            config.get("final_storage_assert_tolerance_mm", 0.001)))
     pick_config = copy_config_with_overrides(config, {
         "storage_location": config["calibration_location"],
         "transfer_z_mode": "safe_z",
+        "pairwise_motion_speed": return_speed,
+        "held_die_motion_speed": return_speed,
     })
     place_config = copy_config_with_overrides(config, {
         "calibration_location": config["storage_location"],
         "transfer_z_mode": "safe_z",
+        "pairwise_motion_speed": return_speed,
+        "held_die_motion_speed": return_speed,
+        "final_storage_assert_location": config["storage_location"],
+        "storage_return_target_assert_tolerance_mm": storage_return_target_assert_tolerance,
+        "final_storage_assert_tolerance_mm": storage_return_target_assert_tolerance,
     })
 
-    log_msg(logger, "Using top vision nozzle-pick target for pick: %s" % loc_to_log(found_pick_target))
+    log_msg(logger, "Using top vision nozzle-pick target for pick: %s" % loc_to_log(measured_die_pick_target))
     log_msg(logger, "Using top vision camera-only center for measurement/math: %s" % loc_to_log(
         found["center_location"]))
     pick = pick_artifact_from_storage(
-        nozzle, part, found_pick_target, pick_config, pick_rotation_deg,
+        nozzle, part, measured_die_pick_target, pick_config, pick_rotation_deg,
         logger=logger)
     place = place_artifact_to_cal_area(
-        nozzle, part, storage_pose, place_config, place_rotation_deg,
+        nozzle, part, final_storage_place_target, place_config, place_rotation_deg,
         logger=logger)
-    verified = find_artifact_top(camera, nozzle, part, storage_pose, config, logger=logger)
+    verified = find_artifact_top(camera, nozzle, part, configured_storage_pose, config, logger=logger)
     verified_center = verified["center_location"].convertToUnits(LengthUnit.Millimeters)
     verified_angle = normalize_rotation(float(verified["artifact_angle_deg"]))
-    dx = float(verified_center.getX()) - float(storage_pose.getX())
-    dy = float(verified_center.getY()) - float(storage_pose.getY())
-    da = normalize_rotation(verified_angle - float(storage_pose.getRotation()))
+    dx = float(verified_center.getX()) - float(configured_storage_pose.getX())
+    dy = float(verified_center.getY()) - float(configured_storage_pose.getY())
+    da = normalize_rotation(verified_angle - float(configured_storage_pose.getRotation()))
     log_msg(logger, "Storage return verify actual center: %s angle %.4f" % (
         loc_to_dict(verified_center), verified_angle))
     log_msg(logger, "Storage return verify error: X %.6f Y %.6f R %.6f" % (
@@ -1347,15 +1471,19 @@ def return_artifact_to_storage(config, nozzle, camera, machine_obj, logger=None)
 
     return {
         "ok": True,
+        "start_pose_source": start_pose_source,
+        "start_pose_mm": loc_to_dict(search_pose_for_die_on_calibration_board),
+        "search_mode": found.get("search_mode", config.get("artifact_search_mode", "radial")),
+        "search_offset_mm": found.get("search_offset_mm"),
         "artifact_angle_before_return_deg": artifact_angle_deg,
         "artifact_pick_angle_sign": artifact_pick_angle_sign,
         "artifact_pick_angle_offset_deg": artifact_pick_angle_offset_deg,
         "pick_rotation_deg": pick_rotation_deg,
         "place_rotation_deg": place_rotation_deg,
-        "storage_target_location": loc_to_dict(storage_pose),
+        "storage_target_location": loc_to_dict(final_storage_place_target),
         "measurement": {
             "center_location": loc_to_dict(found["center_location"]),
-            "nozzle_pick_location": loc_to_dict(found_pick_target),
+            "nozzle_pick_location": loc_to_dict(measured_die_pick_target),
             "artifact_angle_deg": artifact_angle_deg,
             "big_circle": found["big_circle"],
             "small_circle": found["small_circle"],
@@ -1390,12 +1518,15 @@ def run_full_sequence(config, nozzle=None, machine_obj=None, logger=None):
         "head_offsets": None,
         "builtin_calibration": None,
         "post_pairwise_resquare": None,
+        "pre_builtin_zero": None,
+        "pre_builtin_zero_before_calibrate": None,
         "pre_builtin_square_verify": None,
         "post_builtin_square_verify": None,
         "artifact_return": None,
     }
     try:
         log_msg(logger, "Start full sequence")
+        log_motion_speed_config(config, logger=logger)
         machine_obj = get_machine(machine_obj)
         nozzle = get_nozzle(machine_obj, nozzle)
         try:
@@ -1423,6 +1554,15 @@ def run_full_sequence(config, nozzle=None, machine_obj=None, logger=None):
         result["head_offset_solver"] = solver
         if not solver.get("ok", False):
             raise Exception("Head offset solver failed: %s" % solver.get("message"))
+        # Runtime-only handoff: use the final pairwise camera-side die pose as
+        # the later return search origin, then re-image after applying offsets.
+        final_pairwise_pose = {
+            "final_artifact_pose_mm": solver.get("final_artifact_pose_mm"),
+            "final_artifact_angle_deg": solver.get("final_artifact_angle_deg"),
+            "final_nozzle_pick_target_mm": solver.get("final_nozzle_pick_target_mm"),
+            "final_search_offset_mm": solver.get("final_search_offset_mm"),
+            "final_camera_location_mm": solver.get("final_camera_location_mm"),
+        }
         result["head_offsets"] = apply_head_offsets_with_backup(
             nozzle, solver["proposed_head_offsets_mm"], logger=logger)
         move_nozzle_to_command_zero(config, nozzle, logger=logger)
@@ -1436,6 +1576,9 @@ def run_full_sequence(config, nozzle=None, machine_obj=None, logger=None):
                 logger=logger
             )
 
+        result["pre_builtin_zero"] = prepare_nozzle_zero_for_builtin_calibration(
+            config, nozzle, logger=logger)
+
         if bool_config(config, "pre_builtin_square_verify_enabled", True):
             result["pre_builtin_square_verify"] = verify_square_tip_at_command_zero_only(
                 config,
@@ -1446,52 +1589,61 @@ def run_full_sequence(config, nozzle=None, machine_obj=None, logger=None):
                 label="pre_builtin_after_head_offset"
             )
 
-        _SUPPRESS_EVENT = True
-        try:
-            log_msg(logger, "Checking nozzle is empty before built-in nozzle-tip calibration")
+        if bool_config(config, "run_builtin_nozzle_tip_calibration", True):
+            _SUPPRESS_EVENT = True
             try:
-                get_part_method = getattr(nozzle, "getPart")
-            except:
-                get_part_method = None
-            try:
-                get_part_callable = callable(get_part_method)
-            except:
-                get_part_callable = False
-            if get_part_callable:
-                part_on_nozzle = get_part_method()
-                if part_on_nozzle is not None:
-                    raise Exception("Cannot run built-in nozzle-tip calibration because OpenPnP still reports part on nozzle: %s" % part_on_nozzle)
-            log_msg(logger, "Nozzle is empty; built-in nozzle-tip calibration can start")
-            log_msg(logger, "Pre-built-in nozzle-tip calibration zero move start")
-            before_builtin = rotate_nozzle_lifted_unwrapped(
-                nozzle, 0.0, logger=logger, speed=empty_nozzle_rotation_speed(config))
-            log_msg(logger, "Pre-built-in nozzle-tip calibration zero move complete: final R %.6f" % (
-                float(before_builtin.getRotation())))
-            before_builtin = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
-            log_msg(logger, "Nozzle R before built-in nozzle-tip calibration: %.6f" % (
-                float(before_builtin.getRotation())))
-            log_msg(logger, "Built-in nozzle-tip calibration start")
-            result["builtin_calibration"] = run_builtin_nozzle_tip_calibration(nozzle)
-            log_msg(logger, "Built-in nozzle-tip calibration end")
-            log_msg(logger, "Post-built-in nozzle-tip calibration zero restore start")
-            after_builtin = rotate_nozzle_lifted_unwrapped(
-                nozzle, 0.0, logger=logger, speed=empty_nozzle_rotation_speed(config))
-            log_msg(logger, "Post-built-in nozzle-tip calibration zero restore complete: final R %.6f" % (
-                float(after_builtin.getRotation())))
-            if bool_config(config, "post_builtin_square_verify_enabled", True):
-                result["post_builtin_square_verify"] = verify_square_tip_at_command_zero_only(
-                    config,
-                    nozzle=nozzle,
-                    camera=None,
-                    machine_obj=machine_obj,
-                    logger=logger,
-                    label="post_builtin"
-                )
-        finally:
-            _SUPPRESS_EVENT = False
+                log_msg(logger, "Checking nozzle is empty before built-in nozzle-tip calibration")
+                try:
+                    get_part_method = getattr(nozzle, "getPart")
+                except:
+                    get_part_method = None
+                try:
+                    get_part_callable = callable(get_part_method)
+                except:
+                    get_part_callable = False
+                if get_part_callable:
+                    part_on_nozzle = get_part_method()
+                    if part_on_nozzle is not None:
+                        raise Exception("Cannot run built-in nozzle-tip calibration because OpenPnP still reports part on nozzle: %s" % part_on_nozzle)
+                log_msg(logger, "Nozzle is empty; built-in nozzle-tip calibration can start")
+                log_msg(logger, "Pre-built-in nozzle-tip calibration zero move start")
+                result["pre_builtin_zero_before_calibrate"] = prepare_nozzle_zero_for_builtin_calibration(
+                    config, nozzle, logger=logger)
+                before_builtin = nozzle.getLocation().convertToUnits(LengthUnit.Millimeters)
+                log_msg(logger, "Pre-built-in nozzle-tip calibration zero move complete: final R %.6f" % (
+                    float(before_builtin.getRotation())))
+                log_msg(logger, "Nozzle R before built-in nozzle-tip calibration: %.6f" % (
+                    float(before_builtin.getRotation())))
+                log_msg(logger, "Built-in nozzle-tip calibration start")
+                result["builtin_calibration"] = run_builtin_nozzle_tip_calibration(nozzle)
+                log_msg(logger, "Built-in nozzle-tip calibration end")
+                log_msg(logger, "Post-built-in nozzle-tip calibration zero restore start")
+                after_builtin = rotate_nozzle_lifted_unwrapped(
+                    nozzle, 0.0, logger=logger, speed=empty_nozzle_rotation_speed(config))
+                log_msg(logger, "Post-built-in nozzle-tip calibration zero restore complete: final R %.6f" % (
+                    float(after_builtin.getRotation())))
+                if bool_config(config, "post_builtin_square_verify_enabled", True):
+                    result["post_builtin_square_verify"] = verify_square_tip_at_command_zero_only(
+                        config,
+                        nozzle=nozzle,
+                        camera=None,
+                        machine_obj=machine_obj,
+                        logger=logger,
+                        label="post_builtin"
+                    )
+            finally:
+                _SUPPRESS_EVENT = False
+        else:
+            result["builtin_calibration"] = {
+                "ok": True,
+                "skipped": True,
+                "reason": "run_builtin_nozzle_tip_calibration disabled"
+            }
+            log_msg(logger, "Built-in nozzle-tip calibration skipped by config; preserving post-pairwise square zero")
 
         result["artifact_return"] = return_artifact_to_storage(
-            config, nozzle, top_camera, machine_obj, logger=logger)
+            config, nozzle, top_camera, machine_obj, logger=logger,
+            starting_artifact_pose=final_pairwise_pose)
         result["ok"] = True
         result["message"] = "ok"
         return result

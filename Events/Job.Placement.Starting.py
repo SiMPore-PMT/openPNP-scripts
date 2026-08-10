@@ -1,854 +1,797 @@
-# ----------- ACTIVE SCRIPT --------------
-# Handles correcting the offset rotation and position of the current plastic manifold (filter disk body/ mwi body),
-# to be assembled. That is, the nozzle already has picked up a part, and is looking to place it.
-# This script replaces the old Nozzle.BeforePlace.py
-#
-# Note:
-#    - runs at the start of each placement/board-location (invoked per placement by OpenPnP).
-#
-# ########################Below below - working code with retrys the OG---- This here is a  new grab from fiducials##########################
 # Job.Placement.Starting.py
 #
-# Use a board-level fiducial *placement* to correct boardLocation (board origin)
-# BEFORE OpenPnP computes placementLocation / plans moves.
-#
-# - Event: Job.Placement.Starting
-# - Uses a BOARD FIDUCIAL PLACEMENT only:
-#       * Placement from boardLocation.getBoard().getPlacements()/getBoardPlacements()
-#         whose type/flag explicitly indicates "Fiducial".
-#       * Location from that placement.getLocation()
-#       * Vision settings / pipeline from that placement (or its Part).
-# - NO FALLBACK to the main part placement, even if that part has fiducialVisionSettings.
-# - Does NOT change placement.getLocation() (design remains unchanged).
-# - Does NOT move the nozzle; only nudges boardLocation in machine coords.
-# - Tries up to MAX_ATTEMPTS vision attempts. If it fails, the placement is
-#   disabled and skipped.
+# Re-measure the current pocket immediately before pick, then update the
+# BoardLocation XY and rotation used by OpenPnP's placement calculation.
+# This is the routine for picking one die at a time, assuming pdms has already been
+# dispensed during Job.Starting.py.
 
-from org.openpnp.model import Location
-from org.openpnp.util import MovableUtils, Utils2D
+import sys
+
+from java.lang import Math, System, Thread
+from org.openpnp.model import Configuration, Location, Placement
+from org.openpnp.spi.MotionPlanner import CompletionType
+from org.openpnp.util import Cycles, MovableUtils, Utils2D
 from org.opencv.core import RotatedRect
-from java.lang import Math, Thread
 
-# ----------------- CONFIG -----------------
-MAX_NUDGE_MM           = 4.0      # max +/- tweak per axis
-APPLY_ROTATION         = True     # set True if you want to also tweak board rotation
-EXPECTED_ANGLE_DEG     = 0.0      # expected fiducial angle in the image
-DESIGN_BOARD_ROT_DEG   = 0.0      # board design rotation (what you WANT it to be)
+SCRIPTS_ROOT = str(scripting.getScriptsDirectory())
+JOB_LIB_DIR = SCRIPTS_ROOT + "/Events/_lib"
+if JOB_LIB_DIR not in sys.path:
+    sys.path.insert(0, JOB_LIB_DIR)
+from job_runtime import GuiJobStateApi, JobRuntimeMonitor, JobStopRequested
 
-PRE_CAPTURE_SETTLE_MS  = 250      # settle before first pipeline.process()
-RESULT_STAGE_KEY       = "results"
 
-# Retry behavior for vision
-MAX_ATTEMPTS           = 3        # number of tries to get a RotatedRect
-RETRY_DELAY_MS         = 250      # delay between attempts (after the first)
+# ----------------- VISION CONFIG -----------------
+MAX_NUDGE_MM = 4.0
+APPLY_ROTATION = True
+EXPECTED_ANGLE_DEG = 0.0
+DESIGN_BOARD_ROT_DEG = 0.0
 
-# Image-to-machine sign controls
+PRE_CAPTURE_SETTLE_MS = 250
+RESULT_STAGE_KEY = "results"
+RETRY_DELAY_MS = 250
+VISION_MEASUREMENT_ATTEMPTS = 2
+RECENTER_MAX_PASSES = 3
+RECENTER_TOLERANCE_MM = 0.02
+
 FLIP_IMAGE_X = False
 FLIP_IMAGE_Y = True
 
 TAG = "Job.Placement.Starting"
+JOB_STATE_POLL_MS = 50
 
 
-# ------------- LOG HELPERS -------------
 def log(msg):
-    # Keep logs ASCII-safe to avoid codec errors
     print "[%s] %s" % (TAG, str(msg))
 
 
-# ------------- HELPER: run pipeline and get RotatedRect with retries -------------
-def find_rotated_rect_with_retries(pipeline):
-    """
-    Try up to MAX_ATTEMPTS times to:
-      - pipeline.process()
-      - extract a RotatedRect from its results
-    Returns:
-      RotatedRect or None
-    """
-    candidate_keys = [RESULT_STAGE_KEY, "results", "preResults"]
-
-    for attempt in range(1, MAX_ATTEMPTS + 1):
-        try:
-            log("Vision attempt %d of %d" % (attempt, MAX_ATTEMPTS))
-
-            pipeline.process()
-            log("pipeline.process() OK on attempt %d" % attempt)
-
-            rr = None
-            for key in candidate_keys:
-                try:
-                    res = pipeline.getResult(key)
-                except:
-                    res = None
-
-                if res is None:
-                    continue
-
-                model = res.getModel()
-                if model is None:
-                    continue
-
-                # model IS a RotatedRect
-                if isinstance(model, RotatedRect):
-                    rr = model
-                    log("Got RotatedRect directly from results key '%s' on attempt %d." %
-                        (key, attempt))
-                    break
-
-                # model is a java.util.List<RotatedRect>
-                if hasattr(model, "size") and hasattr(model, "get"):
-                    if model.size() > 0:
-                        first = model.get(0)
-                        if isinstance(first, RotatedRect) or hasattr(first, "center"):
-                            rr = first
-                            log("Got RotatedRect[0] from list at results key '%s' on attempt %d." %
-                                (key, attempt))
-                            break
-
-            if rr is not None:
-                return rr
-
-            log("No RotatedRect found on attempt %d." % attempt)
-
-        except Exception, e:
-            log("Exception during pipeline attempt %d: %s" % (attempt, e))
-
-        # If not last attempt, wait a bit and try again
-        if attempt < MAX_ATTEMPTS:
-            log("Retrying in %d ms..." % RETRY_DELAY_MS)
-            Thread.sleep(RETRY_DELAY_MS)
-
-    # All attempts failed
-    return None
+def log_err(msg):
+    print "[%s ERROR] %s" % (TAG, str(msg))
 
 
-# ------------- HELPER: get board fiducial placement + settings -------------
-def get_board_fiducial_placement_and_settings(board):
-    """
-    Locate a fiducial *placement* on the board and its fiducial vision settings.
+class VisionMeasurementError(Exception):
+    pass
 
-    Rules:
-      - Only placements explicitly marked as fiducial are considered:
-          * placement.isFiducial() == true, OR
-          * "FIDUCIAL" in str(placement.getType()).upper()
-      - We do NOT treat "any placement whose part has fiducialVisionSettings" as a fiducial.
-      - Once a fiducial placement is chosen, its pipeline may still come from:
-          * placement.getFiducialVisionSettings(), or
-          * placement.getVisionSettings(), or
-          * placement.getPart().getFiducialVisionSettings().
-    """
-    placements = None
 
-    # Try getPlacements()
-    if hasattr(board, "getPlacements"):
-        try:
-            placements = board.getPlacements()
-            log("Using board.getPlacements().")
-        except:
-            placements = None
+RUNTIME_MONITOR = None
 
-    # Fallback: getBoardPlacements()
-    if placements is None and hasattr(board, "getBoardPlacements"):
-        try:
-            placements = board.getBoardPlacements()
-            log("Using board.getBoardPlacements().")
-        except:
-            placements = None
 
-    if placements is None:
-        raise Exception("Board placements list is null; configure at least one placement on the board.")
+def runtime_checkpoint(label, allow_pause=True):
+    if RUNTIME_MONITOR is not None:
+        RUNTIME_MONITOR.checkpoint(label, allow_pause)
 
-    # Count placements
-    count = 0
-    if hasattr(placements, "size"):
-        count = placements.size()
-    else:
-        try:
-            for _ in placements:
-                count += 1
-        except TypeError:
-            count = 0
 
-    log("Board placements count: %d" % count)
-    if count == 0:
-        raise Exception("Board has no placements; this script requires at least one fiducial placement.")
+SCRIPT_T0_NS = System.nanoTime()
+LAST_T_NS = SCRIPT_T0_NS
 
-    # Helper: determine if placement is explicitly a fiducial placement
-    def is_fiducial_placement(plc):
-        try:
-            if hasattr(plc, "isFiducial") and plc.isFiducial():
-                return True
-        except:
-            pass
-        try:
-            if hasattr(plc, "getType"):
-                t = plc.getType()
-                if t is not None and "FIDUCIAL" in str(t).upper():
-                    return True
-        except:
-            pass
-        # IMPORTANT: do NOT infer from part's fiducialVisionSettings here.
-        return False
 
-    # Helper: fetch vision settings for a given (already-identified) fiducial placement
-    def get_vision_settings_for_placement(plc):
-        # Try placement-level settings first
-        try:
-            if hasattr(plc, "getFiducialVisionSettings"):
-                vs = plc.getFiducialVisionSettings()
-                if vs is not None:
-                    return vs
-        except:
-            pass
+def elapsed_ms_since(t0_ns):
+    return (System.nanoTime() - t0_ns) / 1000000.0
 
-        try:
-            if hasattr(plc, "getVisionSettings"):
-                vs = plc.getVisionSettings()
-                if vs is not None:
-                    return vs
-        except:
-            pass
 
-        # Then part-level settings as a fallback for *fiducial* placements only
-        try:
-            if hasattr(plc, "getPart"):
-                p = plc.getPart()
-                if p is not None and hasattr(p, "getFiducialVisionSettings"):
-                    vs = p.getFiducialVisionSettings()
-                    if vs is not None:
-                        return vs
-        except:
-            pass
+def log_t(label):
+    global LAST_T_NS
+    now_ns = System.nanoTime()
+    abs_ms = (now_ns - SCRIPT_T0_NS) / 1000000.0
+    delta_ms = (now_ns - LAST_T_NS) / 1000000.0
+    LAST_T_NS = now_ns
+    log("[TIMER] %+9.3f ms | +%8.3f ms | %s" % (abs_ms, delta_ms, label))
+    return now_ns
 
-        return None
 
-    # Iterate placements and find the first good fiducial candidate
-    chosen_plc = None
-    chosen_loc = None
-    chosen_vs  = None
-
-    if hasattr(placements, "size"):
-        # Java List style
-        for i in range(placements.size()):
-            plc = placements.get(i)
-            # Skip disabled placements if that exists
-            try:
-                if hasattr(plc, "isEnabled") and not plc.isEnabled():
-                    log("Skipping placement index %d because it is disabled." % i)
-                    continue
-            except:
-                pass
-
-            if not is_fiducial_placement(plc):
-                continue
-
-            vs = get_vision_settings_for_placement(plc)
-            if vs is None:
-                log("Fiducial placement index %d has no vision settings; skipping." % i)
-                continue
-
-            try:
-                loc = plc.getLocation()
-            except:
-                log("Fiducial placement index %d has no location; skipping." % i)
-                continue
-
-            chosen_plc = plc
-            chosen_loc = loc
-            chosen_vs  = vs
-            log("Selected fiducial placement at index %d." % i)
-            break
-    else:
-        # Python-iterable style
-        idx = 0
-        try:
-            for plc in placements:
-                try:
-                    if hasattr(plc, "isEnabled") and not plc.isEnabled():
-                        log("Skipping placement index %d because it is disabled." % idx)
-                        idx += 1
-                        continue
-                except:
-                    pass
-
-                if not is_fiducial_placement(plc):
-                    idx += 1
-                    continue
-
-                vs = get_vision_settings_for_placement(plc)
-                if vs is None:
-                    log("Fiducial placement index %d has no vision settings; skipping." % idx)
-                    idx += 1
-                    continue
-
-                try:
-                    loc = plc.getLocation()
-                except:
-                    log("Fiducial placement index %d has no location; skipping." % idx)
-                    idx += 1
-                    continue
-
-                chosen_plc = plc
-                chosen_loc = loc
-                chosen_vs  = vs
-                log("Selected fiducial placement at index %d." % idx)
-                break
-        except TypeError:
-            pass
-
-    if chosen_plc is None or chosen_vs is None or chosen_loc is None:
-        raise Exception("No enabled board fiducial placement with vision settings found on the board.")
-
-    # Label for logs
-    label = "<unnamed>"
+def java_list_to_py(model):
+    if model is None:
+        return []
+    if isinstance(model, list):
+        return model
+    if hasattr(model, "size") and hasattr(model, "get"):
+        out = []
+        for i in range(model.size()):
+            out.append(model.get(i))
+        return out
     try:
-        if hasattr(chosen_plc, "getName") and chosen_plc.getName() is not None:
-            label = chosen_plc.getName()
-        elif hasattr(chosen_plc, "getId") and chosen_plc.getId() is not None:
-            label = chosen_plc.getId()
+        return list(model)
+    except:
+        return [model]
+
+
+def object_name(obj):
+    if obj is None:
+        return ""
+    for method in ["getName", "getId"]:
+        try:
+            value = getattr(obj, method)()
+            if value is not None:
+                return str(value)
+        except:
+            pass
+    return str(obj)
+
+
+def wait_still(movable, label):
+    t0 = log_t("%s: wait_still BEFORE WaitForStillstand" % label)
+    movable.waitForCompletion(CompletionType.WaitForStillstand)
+    log_t("%s: wait_still AFTER WaitForStillstand elapsed=%.3f ms" %
+          (label, elapsed_ms_since(t0)))
+    runtime_checkpoint("%s completed" % label, False)
+
+def move_safe_wait(movable, target, label):
+    runtime_checkpoint("before %s" % label)
+    MovableUtils.moveToLocationAtSafeZ(movable, target)
+    wait_still(movable, label)
+    runtime_checkpoint("after %s" % label)
+
+
+def cooperative_sleep(ms, label, allow_pause=True):
+    remaining = int(ms)
+    while remaining > 0:
+        runtime_checkpoint(label, allow_pause)
+        interval = min(remaining, JOB_STATE_POLL_MS)
+        Thread.sleep(interval)
+        remaining -= interval
+    runtime_checkpoint(label, allow_pause)
+
+def get_camera_image_size(cam):
+    try:
+        return cam.getWidth(), cam.getHeight()
     except:
         pass
+    image = cam.settleAndCapture()
+    return image.getWidth(), image.getHeight()
 
-    return chosen_plc, chosen_loc, chosen_vs, label
+
+def get_camera_units_per_pixel(cam):
+    if hasattr(cam, "getUnitsPerPixelAtZ"):
+        upp_loc = cam.getUnitsPerPixelAtZ()
+    else:
+        upp_loc = cam.getUnitsPerPixel()
+    if upp_loc is None:
+        raise Exception("Camera units-per-pixel not configured.")
+    return upp_loc
 
 
-# ------------- MAIN BODY -------------
-try:
-    # ---- Check we have the basics for this event ----
-    required_globals = ("placement", "boardLocation", "machine")
-    missing = [name for name in required_globals if name not in globals()]
-    if missing:
-        log("ERROR: Missing globals: %s" % ", ".join(missing))
-        raise Exception("Missing globals: %s" % ", ".join(missing))
+def extract_rotated_rects_from_model(model):
+    rects = []
+    if model is None:
+        return rects
+    if isinstance(model, RotatedRect) or hasattr(model, "center"):
+        rects.append(model)
+        return rects
+    if hasattr(model, "size") and hasattr(model, "get"):
+        for i in range(model.size()):
+            item = model.get(i)
+            if isinstance(item, RotatedRect) or hasattr(item, "center"):
+                rects.append(item)
+        return rects
+    try:
+        for item in model:
+            if isinstance(item, RotatedRect) or hasattr(item, "center"):
+                rects.append(item)
+    except:
+        pass
+    return rects
 
-    pl  = placement
-    bl  = boardLocation
-    mac = machine
 
-    # Part only used for logging
-    prt = None
-    if "part" in globals():
-        prt = part
-    pid = prt.getId() if (prt is not None and hasattr(prt, "getId")) else "<no-part-id>"
-    log("Part id=%s" % pid)
-
-    # ---- Get the BOARD from the boardLocation (not from placement) ----
-    board = None
-    if hasattr(bl, "getBoard"):
+def get_pipeline_rotated_rects(pipeline):
+    rects = []
+    for key in [RESULT_STAGE_KEY, "results", "preResults"]:
         try:
-            board = bl.getBoard()
+            res = pipeline.getResult(key)
         except:
-            board = None
-
-    if board is None:
-        raise Exception("boardLocation.getBoard() returned null; board-level fiducial placement is required.")
-
-    log("Board object: %s" % board)
-
-    # ---- Locate board fiducial placement + its vision settings ----
-    fidPlacement, fidLoc, settings, fidLabel = get_board_fiducial_placement_and_settings(board)
-
-    log("Using BOARD fiducial placement '%s' design location: (X=%.4f, Y=%.4f, Z=%.4f, R=%.4f)" %
-        (fidLabel, fidLoc.getX(), fidLoc.getY(), fidLoc.getZ(), fidLoc.getRotation()))
-
-    if settings is None:
-        raise Exception("Board fiducial placement '%s' has no vision settings; configure a fiducial pipeline." %
-                        fidLabel)
-
-    log("FiducialVisionSettings source=board fiducial placement -> %s" % settings)
-
-    pipeline = settings.getPipeline()
-    if pipeline is None:
-        raise Exception("Board fiducial placement '%s' vision settings pipeline is null." % fidLabel)
-
-    log("Pipeline=%s" % pipeline)
-
-    # ---- DESIGN fiducial location (board-relative) ----
-    dLoc = fidLoc  # board-relative design location of fiducial
-
-    # ---- BOARD origin (machine coords) ----
-    blLoc = bl.getLocation()
-    log("boardLocation BEFORE: (X=%.4f, Y=%.4f, Z=%.4f, R=%.4f)" %
-        (blLoc.getX(), blLoc.getY(), blLoc.getZ(), blLoc.getRotation()))
-
-    # ---- Compute nominal machine location of the fiducial ourselves ----
-    pLoc = Utils2D.calculateBoardPlacementLocation(bl, dLoc)
-    log("Nominal fiducial machine location (computed): (X=%.4f, Y=%.4f, Z=%.4f, R=%.4f)" %
-        (pLoc.getX(), pLoc.getY(), pLoc.getZ(), pLoc.getRotation()))
-
-    # ---- Move TOP camera over nominal fiducial XY ----
-    head = mac.getDefaultHead()
-    cam  = head.getDefaultCamera()
-    if cam is None:
-        raise Exception("Default head camera is null.")
-
-    camLoc = cam.getLocation()
-    camTarget = Location(
-        pLoc.getUnits(),
-        pLoc.getX(),        # same XY as nominal fiducial
-        pLoc.getY(),
-        camLoc.getZ(),      # camera's calibrated Z
-        camLoc.getRotation()
-    )
-
-    MovableUtils.moveToLocationAtSafeZ(cam, camTarget)
-    log("Camera @ (X=%.4f, Y=%.4f, Z=%.4f, R=%.4f)" %
-        (camTarget.getX(), camTarget.getY(), camTarget.getZ(), camTarget.getRotation()))
-
-    # ---- Settling before pipeline ----
-    if PRE_CAPTURE_SETTLE_MS > 0:
-        Thread.sleep(PRE_CAPTURE_SETTLE_MS)
-        log("Settled %d ms before pipeline.process()." % PRE_CAPTURE_SETTLE_MS)
-
-    # ---- Try up to MAX_ATTEMPTS to get a RotatedRect ----
-    rr = find_rotated_rect_with_retries(pipeline)
-    if rr is None:
-        log("Board fiducial NOT FOUND after %d attempts. Disabling placement and skipping correction." %
-            MAX_ATTEMPTS)
-
-        # Disable this placement so the job processor will skip it.
+            res = None
+        if res is None:
+            continue
         try:
-            if hasattr(pl, "setEnabled"):
-                pl.setEnabled(False)
-                log("placement.setEnabled(False) called.")
-        except Exception, e2:
-            log("Failed to disable placement: %s" % e2)
-
-        # Optionally tag a comment so you see it in the job
-        try:
-            existing = pl.getComments() or ""
-            msg = "[auto-skip: board fiducial not found %d attempts]" % MAX_ATTEMPTS
-            if existing:
-                pl.setComments(existing + " " + msg)
-            else:
-                pl.setComments(msg)
+            model = res.getModel()
         except:
-            pass
+            try:
+                model = res.model
+            except:
+                model = None
+        rects.extend(extract_rotated_rects_from_model(model))
+    return rects
 
-        # Nothing else to do for this placement
-        raise SystemExit
 
-    # We have a RotatedRect
-    log("Measured RotatedRect angle: %.4f deg" % rr.angle)
+def choose_closest_rect_to_image_center(rects, width, height):
+    best = None
+    best_dist2 = None
+    cx = width / 2.0
+    cy = height / 2.0
+    for rr in rects:
+        dx = rr.center.x - cx
+        dy = rr.center.y - cy
+        dist2 = dx * dx + dy * dy
+        if best is None or dist2 < best_dist2:
+            best = rr
+            best_dist2 = dist2
+    return best, best_dist2
 
-    # ---- Capture 1 image just for geometry (w,h) ----
-    image = cam.capture()
-    w = image.getWidth()
-    h = image.getHeight()
-    log("Captured image for geometry: %dx%d" % (w, h))
 
-    # Pixel offset from image center
-    px = rr.center.x - (w / 2.0)
-    py = rr.center.y - (h / 2.0)
-    log("px,py=%.3f,%.3f" % (px, py))
-
-    # Optional flips to adapt image axes to machine axes
+def rect_center_machine_offset(cam_loc, upp_loc, rr, width, height):
+    px = rr.center.x - (width / 2.0)
+    py = rr.center.y - (height / 2.0)
     if FLIP_IMAGE_X:
         px = -px
     if FLIP_IMAGE_Y:
         py = -py
 
-    # Camera-frame mm offset
-    if hasattr(cam, "getUnitsPerPixelAtZ"):
-        uppLoc = cam.getUnitsPerPixelAtZ()
-    else:
-        uppLoc = cam.getUnitsPerPixel()
+    dx_cam = px * upp_loc.getX()
+    dy_cam = py * upp_loc.getY()
 
-    if uppLoc is None:
-        raise Exception("Camera units-per-pixel not configured (uppLoc is null).")
-
-    upx = uppLoc.getX()
-    upy = uppLoc.getY()
-    log("Units per pixel: upx=%.9f, upy=%.9f at Z=%.3f" %
-        (upx, upy, uppLoc.getZ()))
-
-    dx_cam = px * upx
-    dy_cam = py * upy
-    log("Camera-frame dx_cam=%.6f, dy_cam=%.6f" % (dx_cam, dy_cam))
-
-    # Rotate into machine frame using camera rotation
-    rad = camLoc.getRotation() * Math.PI / 180.0
-    c   = Math.cos(rad)
-    s   = Math.sin(rad)
-
+    rad = cam_loc.getRotation() * Math.PI / 180.0
+    c = Math.cos(rad)
+    s = Math.sin(rad)
     dx = dx_cam * c - dy_cam * s
     dy = dx_cam * s + dy_cam * c
-    log("Machine-frame dx=%.6f, dy=%.6f" % (dx, dy))
+    return dx, dy, px, py
 
-    # ---- Clamp tweak so we don't go wild ----
-    if abs(dx) > MAX_NUDGE_MM or abs(dy) > MAX_NUDGE_MM:
-        if dx >  MAX_NUDGE_MM: dx =  MAX_NUDGE_MM
-        if dx < -MAX_NUDGE_MM: dx = -MAX_NUDGE_MM
-        if dy >  MAX_NUDGE_MM: dy =  MAX_NUDGE_MM
-        if dy < -MAX_NUDGE_MM: dy = -MAX_NUDGE_MM
-        log("Clamped dx,dy to +/-%.3f mm" % MAX_NUDGE_MM)
 
-    # ---- For debugging: corrected nominal fiducial target (not written anywhere) ----
-    corrected = Location(
-        pLoc.getUnits(),
-        pLoc.getX() + dx,
-        pLoc.getY() + dy,
-        pLoc.getZ(),
-        pLoc.getRotation()
+def location_xy_distance_mm(a, b):
+    a_mm = a.convertToUnits(a.getUnits())
+    b_units = a_mm.getUnits()
+    b_mm = b.convertToUnits(b_units)
+    dx = a_mm.getX() - b_mm.getX()
+    dy = a_mm.getY() - b_mm.getY()
+    return abs(dx), abs(dy)
+
+
+def detection_inside_initial_view(initial_view_loc, detected_loc, upp_loc, width, height):
+    dx, dy = location_xy_distance_mm(initial_view_loc, detected_loc)
+    upp_mm = upp_loc.convertToUnits(initial_view_loc.getUnits())
+    half_x = abs(upp_mm.getX()) * width / 2.0
+    half_y = abs(upp_mm.getY()) * height / 2.0
+    return dx <= half_x and dy <= half_y, dx, dy, half_x, half_y
+
+
+def move_camera_to_detected_center(cam, detected_loc, label):
+    cam_loc = cam.getLocation()
+    detected_cam_units = detected_loc.convertToUnits(cam_loc.getUnits())
+    target = Location(
+        cam_loc.getUnits(),
+        detected_cam_units.getX(),
+        detected_cam_units.getY(),
+        cam_loc.getZ(),
+        cam_loc.getRotation()
+    )
+    move_safe_wait(cam, target, label)
+
+
+def get_board_placements(board):
+    for method in ["getPlacements", "getBoardPlacements"]:
+        try:
+            placements = getattr(board, method)()
+            if placements is not None:
+                log("Using board.%s()." % method)
+                return placements
+        except:
+            pass
+    raise Exception("Board placements list is null.")
+
+
+def is_fiducial_placement(plc):
+    try:
+        if hasattr(plc, "isFiducial") and plc.isFiducial():
+            return True
+    except:
+        pass
+    try:
+        if hasattr(plc, "getType"):
+            t = plc.getType()
+            if t is not None and "FIDUCIAL" in str(t).upper():
+                return True
+    except:
+        pass
+    return False
+
+
+def get_vision_settings_for_fiducial(plc):
+    for method in ["getFiducialVisionSettings", "getVisionSettings"]:
+        try:
+            settings = getattr(plc, method)()
+            if settings is not None:
+                return settings
+        except:
+            pass
+    try:
+        p = plc.getPart()
+        if p is not None and hasattr(p, "getFiducialVisionSettings"):
+            settings = p.getFiducialVisionSettings()
+            if settings is not None:
+                return settings
+    except:
+        pass
+    return None
+
+
+def get_board_fiducial_placement_and_settings(board):
+    placements = get_board_placements(board)
+    count = len(java_list_to_py(placements))
+    log("Board placements count: %d" % count)
+
+    for i, plc in enumerate(java_list_to_py(placements)):
+        try:
+            if hasattr(plc, "isEnabled") and not plc.isEnabled():
+                continue
+        except:
+            pass
+        if not is_fiducial_placement(plc):
+            continue
+        settings = get_vision_settings_for_fiducial(plc)
+        if settings is None:
+            log("Fiducial placement index %d has no vision settings; skipping." % i)
+            continue
+        loc = plc.getLocation()
+        label = object_name(plc) or "<unnamed>"
+        log("Selected fiducial placement '%s' at index %d." % (label, i))
+        return plc, loc, settings, label
+
+    raise Exception("No enabled board fiducial placement with vision settings found.")
+
+
+def make_board_location(bl_loc, x, y, z, r):
+    return Location(bl_loc.getUnits(), x, y, z, r)
+
+
+def prepare_pipeline_context(pipeline, cam, fid_placement, bl, prt):
+    for name, value in [
+        ("camera", cam),
+        ("placement", fid_placement),
+        ("boardLocation", bl),
+    ]:
+        try:
+            pipeline.setProperty(name, value)
+        except Exception, e:
+            log("Could not set pipeline %s property: %s" % (name, e))
+
+    try:
+        p = None
+        if hasattr(fid_placement, "getPart"):
+            p = fid_placement.getPart()
+        if p is None:
+            p = prt
+        if p is not None:
+            pipeline.setProperty("part", p)
+    except Exception, e:
+        log("Could not set pipeline part property: %s" % e)
+
+
+def measure_board_fiducial_correction(mac, bl, board, prt, label):
+    fid_placement, fid_loc, settings, fid_label = \
+        get_board_fiducial_placement_and_settings(board)
+
+    log("[%s] Using BOARD fiducial '%s' design location: X=%.4f Y=%.4f Z=%.4f R=%.4f" %
+        (label, fid_label, fid_loc.getX(), fid_loc.getY(),
+         fid_loc.getZ(), fid_loc.getRotation()))
+
+    pipeline = settings.getPipeline()
+    if pipeline is None:
+        raise Exception("Fiducial vision settings pipeline is null.")
+
+    bl_loc = bl.getLocation()
+    p_loc = Utils2D.calculateBoardPlacementLocation(bl, fid_loc)
+    head = mac.getDefaultHead()
+    cam = head.getDefaultCamera()
+    if cam is None:
+        raise Exception("Default head camera is null.")
+
+    prepare_pipeline_context(pipeline, cam, fid_placement, bl, prt)
+
+    base_cam_loc = cam.getLocation()
+    cam_target = Location(
+        p_loc.getUnits(),
+        p_loc.getX(),
+        p_loc.getY(),
+        base_cam_loc.getZ(),
+        base_cam_loc.getRotation()
     )
 
-    # --- Rotation handling ---
-    # Absolute board rotation:
-    #   newBoardRot = DESIGN_BOARD_ROT_DEG + (EXPECTED_ANGLE_DEG - measuredAngle)
-    # so we do NOT accumulate on top of previous boardLocation rotation.
-    dtheta      = 0.0
-    newBoardRot = blLoc.getRotation()
+    last_reject = "not attempted"
+    for measurement_attempt in range(1, VISION_MEASUREMENT_ATTEMPTS + 1):
+        runtime_checkpoint("%s measurement attempt %d" %
+                           (label, measurement_attempt))
+        if measurement_attempt > 1:
+            cooperative_sleep(
+                RETRY_DELAY_MS,
+                "%s measurement retry delay" % label)
+        log("[%s] Measurement attempt %d of %d." %
+            (label, measurement_attempt, VISION_MEASUREMENT_ATTEMPTS))
 
-    if APPLY_ROTATION:
-        measuredAngle = rr.angle
-        newBoardRot   = DESIGN_BOARD_ROT_DEG + (EXPECTED_ANGLE_DEG - measuredAngle)
-        dtheta        = newBoardRot - blLoc.getRotation()
+        move_safe_wait(
+            cam, cam_target,
+            "%s camera nominal attempt %d" % (label, measurement_attempt))
+        initial_view_loc = cam_target
 
-        corrected = Location(
-            corrected.getUnits(),
-            corrected.getX(),
-            corrected.getY(),
-            corrected.getZ(),
-            newBoardRot  # reflect final board rotation in debug location
-        )
-        log("Rotation tweak dTheta=%.3f deg (measured=%.3f, designBoard=%.3f, newBoard=%.3f)" %
-            (dtheta, measuredAngle, DESIGN_BOARD_ROT_DEG, newBoardRot))
+        for recenter_pass in range(1, RECENTER_MAX_PASSES + 1):
+            wait_still(
+                cam,
+                "%s recenter pass %d camera" % (label, recenter_pass))
+            if PRE_CAPTURE_SETTLE_MS > 0:
+                cooperative_sleep(
+                    PRE_CAPTURE_SETTLE_MS,
+                    "%s recenter pass %d capture settle" %
+                    (label, recenter_pass))
+                log("[%s] Recenter pass %d settled %d ms before pipeline.process()." %
+                    (label, recenter_pass, PRE_CAPTURE_SETTLE_MS))
 
-    log("CORRECTED nominal fid target (debug): (X=%.4f, Y=%.4f, Z=%.4f, R=%.4f)" %
-        (corrected.getX(), corrected.getY(), corrected.getZ(), corrected.getRotation()))
+            try:
+                runtime_checkpoint(
+                    "%s recenter pass %d before vision capture" %
+                    (label, recenter_pass))
+                pipeline.process()
+                runtime_checkpoint(
+                    "%s recenter pass %d after vision capture" %
+                    (label, recenter_pass))
+                log("[%s] pipeline.process() OK attempt=%d pass=%d" %
+                    (label, measurement_attempt, recenter_pass))
+            except Exception, e:
+                last_reject = "pipeline exception: %s" % e
+                log("[%s] Rejected vision pass: %s" % (label, last_reject))
+                break
 
-    # ---- APPLY: update boardLocation ----
-    newBl = Location(
-        blLoc.getUnits(),
-        blLoc.getX() + dx,
-        blLoc.getY() + dy,
-        blLoc.getZ(),
-        newBoardRot
-    )
-    bl.setLocation(newBl)
-    log("Updated boardLocation: (X=%.4f, Y=%.4f, Z=%.4f, R=%.4f)" %
-        (newBl.getX(), newBl.getY(), newBl.getZ(), newBl.getRotation()))
+            rects = get_pipeline_rotated_rects(pipeline)
+            if len(rects) == 0:
+                last_reject = "no RotatedRect results"
+                log("[%s] Rejected vision pass: %s" % (label, last_reject))
+                break
 
-except SystemExit:
-    # Clean early exit used when we decided to skip placement.
-    pass
+            width, height = get_camera_image_size(cam)
+            rr, dist2 = choose_closest_rect_to_image_center(rects, width, height)
+            if rr is None:
+                last_reject = "no usable RotatedRect results"
+                log("[%s] Rejected vision pass: %s" % (label, last_reject))
+                break
 
+            cam_loc = cam.getLocation()
+            upp_loc = get_camera_units_per_pixel(cam)
+            center_dx, center_dy, px, py = rect_center_machine_offset(
+                cam_loc, upp_loc, rr, width, height)
+
+            # Match the original placement-starting correction convention:
+            # the measured machine-frame offset is applied as p_loc + dx/dy.
+            detected_loc = Location(
+                cam_loc.getUnits(),
+                cam_loc.getX() + center_dx,
+                cam_loc.getY() + center_dy,
+                cam_loc.getZ(),
+                cam_loc.getRotation()
+            )
+            p_loc_bl_units = p_loc.convertToUnits(bl_loc.getUnits())
+            detected_bl_units = detected_loc.convertToUnits(bl_loc.getUnits())
+            board_dx = detected_bl_units.getX() - p_loc_bl_units.getX()
+            board_dy = detected_bl_units.getY() - p_loc_bl_units.getY()
+
+            log("[%s] attempt=%d pass=%d rects=%d chosen px=%.3f py=%.3f centered dx=%.6f dy=%.6f board dx=%.6f dy=%.6f angle=%.4f" %
+                (label, measurement_attempt, recenter_pass, len(rects),
+                 px, py, center_dx, center_dy, board_dx, board_dy, rr.angle))
+
+            inside, view_dx, view_dy, half_x, half_y = \
+                detection_inside_initial_view(
+                    initial_view_loc, detected_loc, upp_loc, width, height)
+            if not inside:
+                last_reject = (
+                    "outside initial view dx=%.6f/%.6f dy=%.6f/%.6f" %
+                    (view_dx, half_x, view_dy, half_y))
+                log("[%s] Rejected vision pass: %s" % (label, last_reject))
+                break
+
+            if abs(board_dx) > MAX_NUDGE_MM or abs(board_dy) > MAX_NUDGE_MM:
+                last_reject = (
+                    "beyond MAX_NUDGE_MM board dx=%.6f dy=%.6f limit=%.6f" %
+                    (board_dx, board_dy, MAX_NUDGE_MM))
+                log("[%s] Rejected vision pass: %s" % (label, last_reject))
+                break
+
+            if (abs(center_dx) <= RECENTER_TOLERANCE_MM and
+                    abs(center_dy) <= RECENTER_TOLERANCE_MM):
+                new_rot = bl_loc.getRotation()
+                if APPLY_ROTATION:
+                    new_rot = DESIGN_BOARD_ROT_DEG + (EXPECTED_ANGLE_DEG - rr.angle)
+                    log("[%s] Rotation newBoard=%.4f from measured=%.4f" %
+                        (label, new_rot, rr.angle))
+
+                new_bl = make_board_location(
+                    bl_loc,
+                    bl_loc.getX() + board_dx,
+                    bl_loc.getY() + board_dy,
+                    bl_loc.getZ(),
+                    new_rot
+                )
+
+                log("[%s] Accepted centered fiducial correction -> board X=%.4f Y=%.4f R=%.4f" %
+                    (label, new_bl.getX(), new_bl.getY(), new_bl.getRotation()))
+
+                return {
+                    "boardLocation": new_bl,
+                    "dx": board_dx,
+                    "dy": board_dy,
+                    "rotation": new_rot,
+                    "angle": rr.angle,
+                    "recenterPass": recenter_pass,
+                    "measurementAttempt": measurement_attempt,
+                }
+
+            last_reject = (
+                "not centered dx=%.6f dy=%.6f tolerance=%.6f" %
+                (center_dx, center_dy, RECENTER_TOLERANCE_MM))
+            if recenter_pass < RECENTER_MAX_PASSES:
+                log("[%s] Recenter pass %d moving camera to detected center: X=%.4f Y=%.4f" %
+                    (label, recenter_pass,
+                     detected_loc.getX(), detected_loc.getY()))
+                move_camera_to_detected_center(
+                    cam, detected_loc,
+                    "%s recenter pass %d" % (label, recenter_pass))
+            else:
+                log("[%s] Rejected vision attempt: %s" % (label, last_reject))
+
+        log("[%s] Measurement attempt %d failed: %s" %
+            (label, measurement_attempt, last_reject))
+
+    raise VisionMeasurementError(
+        "[%s] Board fiducial not confirmed after %d attempts; last reject: %s" %
+        (label, VISION_MEASUREMENT_ATTEMPTS, last_reject))
+
+
+def get_reference_job_processor(event_processor):
+    expected = "org.openpnp.machine.reference.ReferencePnpJobProcessor"
+    cls = event_processor.getClass()
+    class_name = str(cls.getName())
+
+    if class_name == expected:
+        return event_processor
+    if not class_name.startswith(expected + "$"):
+        raise Exception(
+            "Unsupported Job.Placement.Starting jobProcessor class: %s" %
+            class_name)
+
+    try:
+        outer_field = cls.getDeclaredField("this$0")
+        outer_field.setAccessible(True)
+        outer = outer_field.get(event_processor)
+    except Exception, e:
+        raise Exception(
+            "Could not unwrap %s through verified this$0 field: %s" %
+            (class_name, e))
+
+    outer_name = str(outer.getClass().getName())
+    if outer_name != expected:
+        raise Exception(
+            "Unexpected outer job processor class: %s" % outer_name)
+    return outer
+
+
+def get_prepared_job_placements(event_processor):
+    processor = get_reference_job_processor(event_processor)
+    try:
+        field = processor.getClass().getDeclaredField("jobPlacements")
+        field.setAccessible(True)
+        return java_list_to_py(field.get(processor))
+    except Exception, e:
+        raise Exception(
+            "Could not read verified ReferencePnpJobProcessor.jobPlacements field: %s" % e)
+
+
+def same_java_object(left, right):
+    if left is right:
+        return True
+    try:
+        return bool(left.equals(right))
+    except:
+        return False
+
+
+def find_current_job_placement(processor, bl, pl):
+    for job_placement in get_prepared_job_placements(processor):
+        if (same_java_object(job_placement.getBoardLocation(), bl) and
+                same_java_object(job_placement.getPlacement(), pl)):
+            return job_placement
+    return None
+
+
+def is_dispense_placement(pl):
+    return pl is not None and pl.getType() == Placement.Type.Dispense
+
+
+def enforce_dispense_prerequisites(job_obj, processor, bl, current_pl):
+    board = bl.getBoard()
+    if board is None:
+        raise Exception("boardLocation.getBoard() returned null.")
+
+    enabled_dispense = []
+    for dispense_pl in java_list_to_py(get_board_placements(board)):
+        if (is_dispense_placement(dispense_pl) and
+                job_obj.retrieveEnabledState(bl, dispense_pl)):
+            enabled_dispense.append(dispense_pl)
+
+    if len(enabled_dispense) == 0:
+        log("No enabled Dispense prerequisite for this board; prealignment allowed.")
+        return
+
+    unmet = []
+    for dispense_pl in enabled_dispense:
+        if job_obj.retrievePlacedStatus(bl, dispense_pl.getId()):
+            continue
+
+        job_placement = find_current_job_placement(
+            processor, bl, dispense_pl)
+        status = "not placed"
+        if job_placement is not None:
+            status = str(job_placement.getStatus())
+            try:
+                error = job_placement.getError()
+                if error is not None:
+                    status = "%s: %s" % (status, str(error))
+            except:
+                pass
+        unmet.append("%s [%s]" % (dispense_pl.getId(), status))
+
+    if len(unmet) == 0:
+        log("All %d enabled Dispense prerequisites are complete; prealignment allowed." %
+            len(enabled_dispense))
+        return
+
+    job_obj.storeErrorHandlingState(
+        bl, current_pl, Placement.ErrorHandling.Defer)
+    raise Exception(
+        "Pick blocked because enabled dispense prerequisite(s) are incomplete: %s" %
+        "; ".join(unmet))
+
+
+def set_job_placement_status(job_placement, wanted_name):
+    status_class = job_placement.getStatus().getClass()
+    for status in status_class.getEnumConstants():
+        if str(status) == wanted_name:
+            job_placement.setStatus(status)
+            return
+    raise Exception("JobPlacement status not found: %s" % wanted_name)
+
+
+def mark_current_instance_skipped(job_obj, processor, bl, pl, reason):
+    job_obj.storePlacedStatus(bl, pl.getId(), True)
+    job_placement = find_current_job_placement(processor, bl, pl)
+    if job_placement is None:
+        raise Exception("Current JobPlacement was not found while marking skip.")
+    set_job_placement_status(job_placement, "Complete")
+    log("Marked current board instance placed/skipped: %s" % reason)
+
+
+def run_placement_vision_only(job_obj, processor, bl, pl, prt):
+    mac = Configuration.get().getMachine()
+    board = bl.getBoard()
+    if board is None:
+        raise Exception("boardLocation.getBoard() returned null.")
+
+    original_bl_loc = bl.getLocation()
+    try:
+        runtime_checkpoint("before pre-placement vision")
+        measured = measure_board_fiducial_correction(
+            mac, bl, board, prt, "pre-placement")
+        runtime_checkpoint("after pre-placement vision")
+        corrected_bl_loc = measured["boardLocation"]
+        bl.setLocation(corrected_bl_loc)
+        runtime_checkpoint("after applying corrected board pose")
+        final_loc = Utils2D.calculateBoardPlacementLocation(bl, pl.getLocation())
+        log("Vision-only board update complete: board X=%.4f Y=%.4f R=%.4f; placement X=%.4f Y=%.4f R=%.4f" %
+            (corrected_bl_loc.getX(), corrected_bl_loc.getY(),
+             corrected_bl_loc.getRotation(), final_loc.getX(),
+             final_loc.getY(), final_loc.getRotation()))
+    except JobStopRequested, stop_e:
+        try:
+            bl.setLocation(original_bl_loc)
+            log("Restored original board pose for user-requested stop.")
+        except Exception, restore_e:
+            log_err("Could not restore board pose during stop: %s" % restore_e)
+            stop_e.cleanup_errors.append(
+                "restore board pose: %s" % restore_e)
+        raise
+    except Exception, e:
+        try:
+            bl.setLocation(original_bl_loc)
+            log("Restored original board pose after placement-time vision failure.")
+        except Exception, restore_e:
+            log_err("Could not restore board pose: %s" % restore_e)
+        mark_current_instance_skipped(job_obj, processor, bl, pl, str(e))
+        raise Exception(
+            "Pocket not confirmed; placement marked skipped. Restart/continue the job to proceed: %s" % e)
+
+
+def wait_machine_still(mac, label):
+    mac.getMotionPlanner().waitForCompletion(
+        None, CompletionType.WaitForStillstand)
+    log("%s complete." % label)
+
+
+def move_head_to_safe_z_for_stop(head, mac, label):
+    head.moveToSafeZ()
+    wait_machine_still(mac, label)
+
+
+def safe_stop_cleanup(mac):
+    errors = []
+    head = mac.getDefaultHead()
+
+    safe_for_discard = False
+    try:
+        move_head_to_safe_z_for_stop(
+            head, mac, "Safe-stop initial head safe Z")
+        safe_for_discard = True
+    except Exception, e:
+        errors.append("initial safe Z: %s" % e)
+        log_err("Safe-stop initial safe Z failed: %s" % e)
+
+    if not safe_for_discard:
+        try:
+            move_head_to_safe_z_for_stop(
+                head, mac, "Safe-stop retry head safe Z before discard")
+            safe_for_discard = True
+        except Exception, e:
+            errors.append("safe Z before discard: %s" % e)
+            log_err("Safe-stop cannot safely travel to discard: %s" % e)
+
+    if safe_for_discard:
+        for nozzle in head.getNozzles():
+            try:
+                carried_part = nozzle.getPart()
+            except Exception, e:
+                errors.append("read %s part state: %s" %
+                              (object_name(nozzle), e))
+                log_err("Could not read part state for nozzle %s: %s" %
+                        (object_name(nozzle), e))
+                continue
+            if carried_part is None:
+                continue
+            try:
+                log("Discarding part %s from nozzle %s at configured OpenPnP discard location." %
+                    (object_name(carried_part), object_name(nozzle)))
+                Cycles.discard(nozzle)
+                if nozzle.getPart() is not None:
+                    raise Exception("nozzle still reports a part after discard")
+            except Exception, e:
+                errors.append("discard from %s: %s" %
+                              (object_name(nozzle), e))
+                log_err("Safe-stop discard failed for nozzle %s: %s" %
+                        (object_name(nozzle), e))
+
+    try:
+        move_head_to_safe_z_for_stop(
+            head, mac, "Safe-stop final head safe Z")
+    except Exception, e:
+        errors.append("final safe Z: %s" % e)
+        log_err("Safe-stop final safe Z failed: %s" % e)
+
+    if len(errors) > 0:
+        raise Exception("Safe-stop cleanup failed: %s" % "; ".join(errors))
+
+    log("Safe-stop cleanup completed successfully.")
+
+required_globals = (
+    "job", "jobProcessor", "placement", "boardLocation", "gui")
+missing_globals = [name for name in required_globals if name not in globals()]
+if missing_globals:
+    raise Exception("Missing Job.Placement.Starting globals: %s" %
+                    ", ".join(missing_globals))
+
+SCRIPT_JOB_STATE = GuiJobStateApi(
+    gui, jobState if "jobState" in globals() else None)
+RUNTIME_MONITOR = JobRuntimeMonitor(
+    SCRIPT_JOB_STATE, TAG, log, log_err, JOB_STATE_POLL_MS)
+try:
+    RUNTIME_MONITOR.start()
+    runtime_checkpoint("placement script start")
+    enforce_dispense_prerequisites(
+        job, jobProcessor, boardLocation, placement)
+    runtime_checkpoint("dispense prerequisites satisfied")
+    run_placement_vision_only(
+        job, jobProcessor, boardLocation, placement,
+        part if "part" in globals() else placement.getPart())
+except JobStopRequested, stop_e:
+    log("User-requested stop received: %s" % stop_e)
+    RUNTIME_MONITOR.begin_cleanup()
+    safe_stop_cleanup(Configuration.get().getMachine())
+    if len(stop_e.cleanup_errors) > 0:
+        raise Exception("Safe-stop cleanup failed: %s" %
+                        "; ".join(stop_e.cleanup_errors))
+    SCRIPT_JOB_STATE.cancel()
 except Exception, e:
-    print "[%s ERROR] %s" % (TAG, e)
-
-# 
-# # Job.Placement.Starting.py
-# #
-#WORKING COMMENTED OUT CAUSE OF DISPENSE. IT USES THE SAME CORRECTION METHOD SO THIS IS REDUNDANT ATM
-# # Use the part fiducial pipeline to correct boardLocation (board origin)
-# # BEFORE OpenPnP computes placementLocation / plans moves.
-# #
-# # - Event: Job.Placement.Starting
-# # - Does NOT change placement.getLocation() (design remains unchanged).
-# # - Does NOT move the nozzle; only nudges boardLocation in machine coords.
-# # - NEW: Tries up to MAX_ATTEMPTS to find a RotatedRect. If it fails,
-# #        it disables the placement and returns (skip this chip).
-
-# from org.openpnp.model import Location
-# from org.openpnp.util import MovableUtils, Utils2D
-# from org.opencv.core import RotatedRect
-# from java.lang import Math, Thread
-
-# # ----------------- CONFIG -----------------
-# MAX_NUDGE_MM           = 4.0      # max +/- tweak per axis
-# APPLY_ROTATION         = True     # set True if you want to also tweak board rotation
-# EXPECTED_ANGLE_DEG     = 0.0      # expected fiducial/part angle in the image
-# DESIGN_BOARD_ROT_DEG   = 0.0      # board design rotation (what you WANT it to be)
-
-# PRE_CAPTURE_SETTLE_MS  = 250     # settle before first pipeline.process()
-# RESULT_STAGE_KEY       = "results"
-
-# # Retry behavior for vision
-# MAX_ATTEMPTS           = 3        # number of tries to get a RotatedRect
-# RETRY_DELAY_MS         = 750      # delay between attempts (after the first)
-
-# # Image-to-machine sign controls
-# # Try FLIP_IMAGE_Y = True first (standard OpenCV -> machine mapping).
-# # If that feels inverted on your machine, change it to False and test.
-# FLIP_IMAGE_X = False
-# FLIP_IMAGE_Y = True
-
-# TAG = "Job.Placement.Starting"
-
-
-# # ------------- LOG HELPERS -------------
-# def log(msg):
-#     # Keep logs ASCII-safe to avoid codec errors
-#     print "[%s] %s" % (TAG, str(msg))
-
-
-# # ------------- HELPER: run pipeline and get RotatedRect with retries -------------
-# def find_rotated_rect_with_retries(pipeline):
-#     """
-#     Try up to MAX_ATTEMPTS times to:
-#       - pipeline.process()
-#       - extract a RotatedRect from its results
-#     Returns:
-#       RotatedRect or None
-#     """
-#     candidate_keys = [RESULT_STAGE_KEY, "results", "preResults"]
-
-#     for attempt in range(1, MAX_ATTEMPTS + 1):
-#         try:
-#             log("Vision attempt %d of %d" % (attempt, MAX_ATTEMPTS))
-
-#             pipeline.process()
-#             log("pipeline.process() OK on attempt %d" % attempt)
-
-#             rr = None
-#             for key in candidate_keys:
-#                 try:
-#                     res = pipeline.getResult(key)
-#                 except:
-#                     res = None
-
-#                 if res is None:
-#                     continue
-
-#                 model = res.getModel()
-#                 if model is None:
-#                     continue
-
-#                 # model IS a RotatedRect
-#                 if isinstance(model, RotatedRect):
-#                     rr = model
-#                     log("Got RotatedRect directly from results key '%s' on attempt %d." %
-#                         (key, attempt))
-#                     break
-
-#                 # model is a java.util.List<RotatedRect>
-#                 if hasattr(model, "size") and hasattr(model, "get"):
-#                     if model.size() > 0:
-#                         first = model.get(0)
-#                         if isinstance(first, RotatedRect) or hasattr(first, "center"):
-#                             rr = first
-#                             log("Got RotatedRect[0] from list at results key '%s' on attempt %d." %
-#                                 (key, attempt))
-#                             break
-
-#             if rr is not None:
-#                 return rr
-
-#             log("No RotatedRect found on attempt %d." % attempt)
-
-#         except Exception, e:
-#             log("Exception during pipeline attempt %d: %s" % (attempt, e))
-
-#         # If not last attempt, wait a bit and try again
-#         if attempt < MAX_ATTEMPTS:
-#             log("Retrying in %d ms..." % RETRY_DELAY_MS)
-#             Thread.sleep(RETRY_DELAY_MS)
-
-#     # All attempts failed
-#     return None
-
-
-# # ------------- MAIN BODY -------------
-# try:
-#     # ---- Check we have the basics for this event ----
-#     required_globals = ("placement", "part", "boardLocation", "machine")
-#     missing = [name for name in required_globals if name not in globals()]
-#     if missing:
-#         log("ERROR: Missing globals: %s" % ", ".join(missing))
-#         raise Exception("Missing globals: %s" % ", ".join(missing))
-
-#     pl  = placement
-#     bl  = boardLocation
-#     prt = part
-#     mac = machine
-
-#     pid = prt.getId() if hasattr(prt, "getId") else "<no-id>"
-#     log("Part id=%s" % pid)
-
-#     # ---- Get part fiducial vision settings + pipeline ----
-#     settings = prt.getFiducialVisionSettings()
-#     if settings is None:
-#         raise Exception("part.getFiducialVisionSettings() returned null.")
-#     log("FiducialVisionSettings=%s" % settings)
-
-#     pipeline = settings.getPipeline()
-#     if pipeline is None:
-#         raise Exception("settings.getPipeline() returned null.")
-#     log("Pipeline=%s" % pipeline)
-
-#     # ---- DESIGN placement (board-relative) ----
-#     dLoc = pl.getLocation()
-#     log("placement.getLocation (design): (X=%.4f, Y=%.4f, Z=%.4f, R=%.4f)" %
-#         (dLoc.getX(), dLoc.getY(), dLoc.getZ(), dLoc.getRotation()))
-
-#     # ---- BOARD origin (machine coords) ----
-#     blLoc = bl.getLocation()
-#     log("boardLocation BEFORE: (X=%.4f, Y=%.4f, Z=%.4f, R=%.4f)" %
-#         (blLoc.getX(), blLoc.getY(), blLoc.getZ(), blLoc.getRotation()))
-
-#     # ---- Compute nominal machine placementLocation ourselves ----
-#     # Proper call: BoardLocation + board-relative Location
-#     pLoc = Utils2D.calculateBoardPlacementLocation(bl, dLoc)
-#     log("Nominal placementLocation (computed): (X=%.4f, Y=%.4f, Z=%.4f, R=%.4f)" %
-#         (pLoc.getX(), pLoc.getY(), pLoc.getZ(), pLoc.getRotation()))
-
-#     # ---- Move TOP camera over nominal placement XY ----
-#     head = mac.getDefaultHead()
-#     cam  = head.getDefaultCamera()
-#     if cam is None:
-#         raise Exception("Default head camera is null.")
-
-#     camLoc = cam.getLocation()
-#     camTarget = Location(
-#         pLoc.getUnits(),
-#         pLoc.getX(),        # same XY as nominal placement
-#         pLoc.getY(),
-#         camLoc.getZ(),      # camera's calibrated Z
-#         camLoc.getRotation()
-#     )
-
-#     MovableUtils.moveToLocationAtSafeZ(cam, camTarget)
-#     log("Camera @ (X=%.4f, Y=%.4f, Z=%.4f, R=%.4f)" %
-#         (camTarget.getX(), camTarget.getY(), camTarget.getZ(), camTarget.getRotation()))
-
-#     # ---- Settling before pipeline ----
-#     if PRE_CAPTURE_SETTLE_MS > 0:
-#         Thread.sleep(PRE_CAPTURE_SETTLE_MS)
-#         log("Settled %d ms before pipeline.process()." % PRE_CAPTURE_SETTLE_MS)
-
-#     # ---- Try up to MAX_ATTEMPTS to get a RotatedRect ----
-#     rr = find_rotated_rect_with_retries(pipeline)
-#     if rr is None:
-#         log("Fiducial NOT FOUND after %d attempts. Disabling placement and skipping correction." %
-#             MAX_ATTEMPTS)
-
-#         # Disable this placement so the job processor will skip it.
-#         try:
-#             if hasattr(pl, "setEnabled"):
-#                 pl.setEnabled(False)
-#                 log("placement.setEnabled(False) called.")
-#         except Exception, e2:
-#             log("Failed to disable placement: %s" % e2)
-
-#         # Optionally tag a comment so you see it in the job
-#         try:
-#             existing = pl.getComments() or ""
-#             msg = "[auto-skip: fiducial not found %d attempts]" % MAX_ATTEMPTS
-#             if existing:
-#                 pl.setComments(existing + " " + msg)
-#             else:
-#                 pl.setComments(msg)
-#         except:
-#             pass
-
-#         # Nothing else to do for this placement
-#         raise SystemExit
-
-#     # We have a RotatedRect
-#     log("Measured RotatedRect angle: %.4f deg" % rr.angle)
-
-#     # ---- Capture 1 image just for geometry (w,h) ----
-#     image = cam.capture()
-#     w = image.getWidth()
-#     h = image.getHeight()
-#     log("Captured image for geometry: %dx%d" % (w, h))
-
-#     # Pixel offset from image center
-#     px = rr.center.x - (w / 2.0)
-#     py = rr.center.y - (h / 2.0)
-#     log("px,py=%.3f,%.3f" % (px, py))
-
-#     # Optional flips to adapt image axes to machine axes
-#     if FLIP_IMAGE_X:
-#         px = -px
-#     if FLIP_IMAGE_Y:
-#         py = -py
-
-#     # Camera-frame mm offset
-#     if hasattr(cam, "getUnitsPerPixelAtZ"):
-#         uppLoc = cam.getUnitsPerPixelAtZ()
-#     else:
-#         uppLoc = cam.getUnitsPerPixel()
-
-#     if uppLoc is None:
-#         raise Exception("Camera units-per-pixel not configured (uppLoc is null).")
-
-#     upx = uppLoc.getX()
-#     upy = uppLoc.getY()
-#     log("Units per pixel: upx=%.9f, upy=%.9f at Z=%.3f" %
-#         (upx, upy, uppLoc.getZ()))
-
-#     dx_cam = px * upx
-#     dy_cam = py * upy
-#     log("Camera-frame dx_cam=%.6f, dy_cam=%.6f" % (dx_cam, dy_cam))
-
-#     # Rotate into machine frame using camera rotation
-#     rad = camLoc.getRotation() * Math.PI / 180.0
-#     c   = Math.cos(rad)
-#     s   = Math.sin(rad)
-
-#     dx = dx_cam * c - dy_cam * s
-#     dy = dx_cam * s + dy_cam * c
-#     log("Machine-frame dx=%.6f, dy=%.6f" % (dx, dy))
-
-#     # ---- Clamp tweak so we don't go wild ----
-#     if abs(dx) > MAX_NUDGE_MM or abs(dy) > MAX_NUDGE_MM:
-#         if dx >  MAX_NUDGE_MM: dx =  MAX_NUDGE_MM
-#         if dx < -MAX_NUDGE_MM: dx = -MAX_NUDGE_MM
-#         if dy >  MAX_NUDGE_MM: dy =  MAX_NUDGE_MM
-#         if dy < -MAX_NUDGE_MM: dy = -MAX_NUDGE_MM
-#         log("Clamped dx,dy to +/-%.3f mm" % MAX_NUDGE_MM)
-
-#     # ---- For debugging: corrected nominal placement target (not written anywhere) ----
-#     corrected = Location(
-#         pLoc.getUnits(),
-#         pLoc.getX() + dx,
-#         pLoc.getY() + dy,
-#         pLoc.getZ(),
-#         pLoc.getRotation()
-#     )
-
-#     # --- Rotation handling ---
-#     # Absolute board rotation:
-#     #   newBoardRot = DESIGN_BOARD_ROT_DEG + (EXPECTED_ANGLE_DEG - measuredAngle)
-#     # so we do NOT accumulate on top of previous boardLocation rotation.
-#     dtheta      = 0.0
-#     newBoardRot = blLoc.getRotation()
-
-#     if APPLY_ROTATION:
-#         measuredAngle = rr.angle
-#         newBoardRot   = DESIGN_BOARD_ROT_DEG + (EXPECTED_ANGLE_DEG - measuredAngle)
-#         dtheta        = newBoardRot - blLoc.getRotation()
-
-#         corrected = Location(
-#             corrected.getUnits(),
-#             corrected.getX(),
-#             corrected.getY(),
-#             corrected.getZ(),
-#             newBoardRot  # reflect final board rotation in debug location
-#         )
-#         log("Rotation tweak dTheta=%.3f deg (measured=%.3f, designBoard=%.3f, newBoard=%.3f)" %
-#             (dtheta, measuredAngle, DESIGN_BOARD_ROT_DEG, newBoardRot))
-
-#     log("CORRECTED nominal target (debug): (X=%.4f, Y=%.4f, Z=%.4f, R=%.4f)" %
-#         (corrected.getX(), corrected.getY(), corrected.getZ(), corrected.getRotation()))
-
-#     # ---- APPLY: update boardLocation ----
-#     # Translation: add dx,dy relative to current board origin.
-#     # Rotation: set ABSOLUTE board rotation to newBoardRot.
-#     newBl = Location(
-#         blLoc.getUnits(),
-#         blLoc.getX() + dx,
-#         blLoc.getY() + dy,
-#         blLoc.getZ(),
-#         newBoardRot
-#     )
-#     bl.setLocation(newBl)
-#     log("Updated boardLocation: (X=%.4f, Y=%.4f, Z=%.4f, R=%.4f)" %
-#         (newBl.getX(), newBl.getY(), newBl.getZ(), newBl.getRotation()))
-
-# except SystemExit:
-#     # Clean early exit used when we decided to skip placement.
-#     pass
-
-# except Exception, e:
-#     print "[%s ERROR] %s" % (TAG, e)
+    log_err(e)
+    raise
+finally:
+    RUNTIME_MONITOR.stop()
