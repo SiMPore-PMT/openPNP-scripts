@@ -18,7 +18,7 @@ from java.util.concurrent.atomic import AtomicBoolean
 from javax.swing import (
     BorderFactory, Box, BoxLayout, JButton, JCheckBox, JComboBox, JFileChooser,
     JFrame, JLabel, JOptionPane, JPanel, JProgressBar, JScrollPane, JSplitPane,
-    JTabbedPane, JTable, JTextArea, JTextField, SwingUtilities,
+    JTabbedPane, JTable, JTextArea, JTextField, SwingConstants, SwingUtilities,
     SwingWorker
 )
 from javax.swing.event import DocumentListener
@@ -63,6 +63,14 @@ def candidate_script_dirs():
 def resolve_scripts_root():
     attempted = []
     for path in candidate_script_dirs():
+        # When this GUI lives beside the backend under Events/Homing, recover
+        # the scripts root directly from that location.
+        local_backend = os.path.join(path, "bed_mesh.py")
+        attempted.append(local_backend)
+        if (os.path.isfile(local_backend) and
+                os.path.basename(path) == "Homing" and
+                os.path.basename(os.path.dirname(path)) == "Events"):
+            return os.path.dirname(os.path.dirname(path))
         backend = os.path.join(path, "Events", "Homing", "bed_mesh.py")
         attempted.append(backend)
         if os.path.isfile(backend):
@@ -74,7 +82,9 @@ SCRIPT_DIR = resolve_scripts_root()
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "bed_mesh_config.json")
 HOMING_DIR = os.path.join(SCRIPT_DIR, "Events", "Homing")
 BACKEND_PATH = os.path.join(HOMING_DIR, "bed_mesh.py")
+SURFACE_PATH = os.path.join(HOMING_DIR, "bed_mesh_surface.py")
 bed_mesh = imp.load_source("bed_mesh_backend", BACKEND_PATH)
+bed_mesh_surface = imp.load_source("bed_mesh_surface", SURFACE_PATH)
 
 IDLE = "IDLE"
 RUNNING = "RUNNING"
@@ -258,6 +268,8 @@ class BedMeshGui(object):
         self.log_area = JTextArea()
         self.json_area = JTextArea()
         self.result_tabs = JTabbedPane()
+        self.surface_views = []
+        self.surface_scale_model = None
 
     def snapshot(self, cfg):
         return json.dumps(bed_mesh.public_config(cfg), sort_keys=True,
@@ -894,34 +906,36 @@ class BedMeshGui(object):
 
     def display_result(self, result):
         self.result_tabs.removeAll()
+        self.surface_views = []
+        self.surface_scale_model = bed_mesh_surface.new_scale_model()
         if result is None:
             self.json_area.setText("No result")
             return
         self.json_area.setText(json.dumps(result, sort_keys=True, indent=2))
         self.json_area.setCaretPosition(0)
         panel_results = list(result.get("panels", []))
+        shared_metrics = bed_mesh_surface.compute_display_metrics(panel_results)
         if panel_results:
             self.add_overview_result(panel_results, result.get("ok", False),
-                result.get("message", ""))
+                result.get("message", ""), shared_metrics)
         for panel_result in panel_results:
             self.add_panel_result(panel_result, result.get("ok", False),
-                result.get("message", ""))
+                result.get("message", ""), shared_metrics)
         if self.result_tabs.getTabCount() == 0:
             empty = JLabel("No completed panel points")
             empty.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20))
             self.result_tabs.addTab("No Results", empty)
 
-    def add_overview_result(self, panel_results, run_ok, run_message):
+    def add_overview_result(self, panel_results, run_ok, run_message,
+            shared_metrics):
         root = JPanel(BorderLayout(5, 5))
         point_count = sum([len(panel.get("points", []))
             for panel in panel_results])
-        offsets = [abs(float(point.get("z_offset_mm", 0.0)))
-            for panel in panel_results for point in panel.get("points", [])]
-        max_abs_offset = max(offsets) if offsets else 0.0
         header = JPanel(BorderLayout())
         summary = JLabel(
-            "%d panels    %d measured points    Maximum absolute offset: %.6f mm" %
-            (len(panel_results), point_count, max_abs_offset))
+            "%d panels    %d measured points    Shared color limits: +/- %.6f mm" %
+            (len(panel_results), point_count,
+             float(shared_metrics.get("max_abs_offset", 0.0))))
         summary.setFont(summary.getFont().deriveFont(Font.BOLD))
         summary.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4))
         if not run_ok:
@@ -934,13 +948,33 @@ class BedMeshGui(object):
             header.add(warning, BorderLayout.NORTH)
         header.add(summary, BorderLayout.SOUTH)
         root.add(header, BorderLayout.NORTH)
-        notice = JLabel(
-            "Mesh point tables and full result JSON are available in the panel tabs.")
-        notice.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20))
-        root.add(notice, BorderLayout.CENTER)
+        root.add(self.build_surface_component(panel_results, shared_metrics),
+            BorderLayout.CENTER)
         self.result_tabs.addTab("Overview", root)
 
-    def add_panel_result(self, panel_result, run_ok, run_message):
+    def build_surface_component(self, panel_results, shared_metrics):
+        try:
+            surface = bed_mesh_surface.BedMeshSurfaceView(
+                panel_results, shared_metrics, self.surface_scale_model)
+            self.surface_views.append(surface)
+            return surface.get_component()
+        except Exception as error:
+            message = "3D visualization unavailable: %s" % str(error)
+        except Throwable as error:
+            message = "3D visualization unavailable: %s" % str(error)
+        self.append_log(message)
+        fallback = JLabel(
+            "<html><center><b>%s</b><br>Mesh measurements and table data are "
+            "still valid.</center></html>" % message)
+        fallback.setOpaque(True)
+        fallback.setBackground(Color(90, 48, 30))
+        fallback.setForeground(Color.WHITE)
+        fallback.setHorizontalAlignment(SwingConstants.CENTER)
+        fallback.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20))
+        return fallback
+
+    def add_panel_result(self, panel_result, run_ok, run_message,
+            shared_metrics):
         root = JPanel(BorderLayout(5, 5))
         summary = panel_result.get("summary", {})
         config = panel_result.get("config", {})
@@ -975,6 +1009,8 @@ class BedMeshGui(object):
         header_panel.add(summary_label, BorderLayout.SOUTH)
         root.add(header_panel, BorderLayout.NORTH)
 
+        surface_component = self.build_surface_component(
+            [panel_result], shared_metrics)
         model = ReadOnlyTableModel()
         columns = ["Row", "Column", "X mm", "Y mm", "Corrected Z mm",
             "Offset mm", "Fine spread mm"]
@@ -992,7 +1028,11 @@ class BedMeshGui(object):
             ])
         table = JTable(model)
         table.setAutoCreateRowSorter(True)
-        root.add(JScrollPane(table), BorderLayout.CENTER)
+        split = JSplitPane(JSplitPane.VERTICAL_SPLIT,
+            surface_component, JScrollPane(table))
+        split.setResizeWeight(0.65)
+        split.setDividerLocation(420)
+        root.add(split, BorderLayout.CENTER)
         tab_name = str(panel_result.get("panel_name"))
         if not panel_complete:
             tab_name = "INCOMPLETE - " + tab_name

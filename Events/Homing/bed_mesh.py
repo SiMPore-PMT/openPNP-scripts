@@ -638,4 +638,4 @@ def export_csv(result, output_directory=None, filename=None):
 
 
 if __name__ == "__main__":
-    print("Bed mesh backend loaded. Launch bed_mesh_gui.py to run a mesh.")
+    print("Bed mesh backend loaded. Launch Events/Homing/bed_mesh_gui.py to run a mesh.")
