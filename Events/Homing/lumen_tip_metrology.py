@@ -37,7 +37,6 @@ from lumen_head_offset_solver import (
     place_artifact_to_cal_area,
     config_with_runtime_part_height,
     rotate_nozzle_lifted_unwrapped,
-    empty_nozzle_rotation_speed,
     normal_motion_speed,
     log_resolved_motion_speed,
     log_motion_speed_config,
@@ -129,7 +128,7 @@ def prepare_nozzle_zero_for_builtin_calibration(config, nozzle, logger=None):
         nozzle,
         desired_zero,
         logger=logger,
-        speed=empty_nozzle_rotation_speed(config)
+        speed=normal_motion_speed(config)
     )
     final_r = float(loc.convertToUnits(LengthUnit.Millimeters).getRotation())
     result["final_rotation_deg"] = final_r
@@ -1619,7 +1618,7 @@ def run_full_sequence(config, nozzle=None, machine_obj=None, logger=None):
                 log_msg(logger, "Built-in nozzle-tip calibration end")
                 log_msg(logger, "Post-built-in nozzle-tip calibration zero restore start")
                 after_builtin = rotate_nozzle_lifted_unwrapped(
-                    nozzle, 0.0, logger=logger, speed=empty_nozzle_rotation_speed(config))
+                    nozzle, 0.0, logger=logger, speed=normal_motion_speed(config))
                 log_msg(logger, "Post-built-in nozzle-tip calibration zero restore complete: final R %.6f" % (
                     float(after_builtin.getRotation())))
                 if bool_config(config, "post_builtin_square_verify_enabled", True):

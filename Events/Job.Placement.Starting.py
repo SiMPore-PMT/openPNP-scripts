@@ -635,22 +635,13 @@ def enforce_dispense_prerequisites(job_obj, processor, bl, current_pl):
         "; ".join(unmet))
 
 
-def set_job_placement_status(job_placement, wanted_name):
-    status_class = job_placement.getStatus().getClass()
-    for status in status_class.getEnumConstants():
-        if str(status) == wanted_name:
-            job_placement.setStatus(status)
-            return
-    raise Exception("JobPlacement status not found: %s" % wanted_name)
-
-
-def mark_current_instance_skipped(job_obj, processor, bl, pl, reason):
-    job_obj.storePlacedStatus(bl, pl.getId(), True)
-    job_placement = find_current_job_placement(processor, bl, pl)
-    if job_placement is None:
-        raise Exception("Current JobPlacement was not found while marking skip.")
-    set_job_placement_status(job_placement, "Complete")
-    log("Marked current board instance placed/skipped: %s" % reason)
+def defer_current_instance(job_obj, bl, pl, reason):
+    # The Pick step must receive an exception to abort the pick that is already
+    # in progress. Defer makes ReferencePnpJobProcessor record it as Errored and
+    # continue the job. Keep placed=False because no die was picked or placed.
+    job_obj.storeErrorHandlingState(bl, pl, Placement.ErrorHandling.Defer)
+    job_obj.storePlacedStatus(bl, pl.getId(), False)
+    log("Deferred current board instance; placement remains unplaced: %s" % reason)
 
 
 def run_placement_vision_only(job_obj, processor, bl, pl, prt):
@@ -688,9 +679,9 @@ def run_placement_vision_only(job_obj, processor, bl, pl, prt):
             log("Restored original board pose after placement-time vision failure.")
         except Exception, restore_e:
             log_err("Could not restore board pose: %s" % restore_e)
-        mark_current_instance_skipped(job_obj, processor, bl, pl, str(e))
+        defer_current_instance(job_obj, bl, pl, str(e))
         raise Exception(
-            "Pocket not confirmed; placement marked skipped. Restart/continue the job to proceed: %s" % e)
+            "Pocket not confirmed; placement deferred and remains unplaced: %s" % e)
 
 
 def wait_machine_still(mac, label):

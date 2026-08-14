@@ -6,6 +6,7 @@ from jarray import array
 from java.lang import Boolean, Class, Object, System, Thread, Throwable
 from org.openpnp.model import Configuration, Location, LengthUnit
 from org.openpnp.spi import Nozzle as SpiNozzle
+from org.openpnp.spi.Locatable import LocationOption
 from org.openpnp.spi.MotionPlanner import CompletionType
 from org.openpnp.util import MovableUtils, VisionUtils
 
@@ -83,33 +84,189 @@ def move_direct_speed(movable, target, speed=None):
     wait_still(movable)
 
 
-def move_pairwise_180_at_safe_z(movable, target, logger=None):
-    """Keep the pairwise 180-degree rotation separate from tiny XY corrections."""
+def move_no_comp(nozzle, target, speed):
+    current_nozzle = nozzle.getLocation().convertToUnits(
+        LengthUnit.Millimeters)
     target = target.convertToUnits(LengthUnit.Millimeters)
 
-    # Match MovableUtils safe-Z handling by lifting the complete head first. The
-    # actual readback retains OpenPnP's effective safe Z for the following moves.
-    movable.getHead().moveToSafeZ()
-    wait_still(movable)
-    safe_location = get_movable_location(movable)
-
-    rotation_target = mm_loc(
-        safe_location.getX(),
-        safe_location.getY(),
-        safe_location.getZ(),
-        target.getRotation(),
+    head_loc = nozzle.toHeadLocation(
+        target,
+        current_nozzle,
+        LocationOption.SuppressDynamicCompensation
     )
-    log_msg(logger, "Pairwise 180 safe-Z rotation target: %s" % loc_to_log(rotation_target))
-    move_direct(movable, rotation_target)
 
-    xy_target = mm_loc(
+    head = nozzle.getHead()
+    move_speed = float(speed)
+    head.moveTo(
+        nozzle,
+        head_loc,
+        move_speed
+    )
+    wait_still(nozzle)
+
+
+def pairwise_head_move(nozzle, target_head, speed, changed_axes,
+        logger=None):
+    current_nozzle = nozzle.getLocation().convertToUnits(
+        LengthUnit.Millimeters)
+    current_head = nozzle.toHeadLocation(current_nozzle)
+    current_raw_axes = nozzle.toRaw(current_head)
+    target_raw_axes = nozzle.toRaw(target_head)
+
+    head = nozzle.getHead()
+    move_speed = float(speed)
+    log_msg(logger,
+        "Pairwise phase %s: current head %s target head %s "
+        "OpenPnP speed scalar %.6f" %
+        (changed_axes,
+         loc_to_log(current_head),
+         loc_to_log(target_head),
+         move_speed))
+    log_msg(logger,
+        "Pairwise phase %s raw axes: current %s target %s" %
+        (changed_axes, str(current_raw_axes), str(target_raw_axes)))
+
+    head.moveTo(nozzle, target_head, move_speed)
+    wait_still(nozzle)
+    log_msg(logger, "Pairwise phase %s complete: stillstand" % changed_axes)
+
+
+def pairwise_rotate_only_no_comp(nozzle, target_rotation, speed,
+        logger=None):
+    current_nozzle = nozzle.getLocation().convertToUnits(
+        LengthUnit.Millimeters)
+    current_head = nozzle.toHeadLocation(current_nozzle)
+
+    logical_rotation_target = mm_loc(
+        current_nozzle.getX(),
+        current_nozzle.getY(),
+        current_nozzle.getZ(),
+        float(target_rotation),
+    )
+    converted_target = nozzle.toHeadLocation(
+        logical_rotation_target,
+        current_nozzle,
+        LocationOption.SuppressDynamicCompensation
+    )
+
+    raw_rotation_target = mm_loc(
+        current_head.getX(),
+        current_head.getY(),
+        current_head.getZ(),
+        converted_target.getRotation(),
+    )
+
+    pairwise_head_move(
+        nozzle, raw_rotation_target, speed, "rotation-only", logger=logger)
+
+
+def pairwise_move_xy_only_no_comp(nozzle, target, speed, logger=None):
+    current_nozzle = nozzle.getLocation().convertToUnits(
+        LengthUnit.Millimeters)
+    current_head = nozzle.toHeadLocation(current_nozzle)
+    target = target.convertToUnits(LengthUnit.Millimeters)
+
+    logical_xy_target = mm_loc(
         target.getX(),
         target.getY(),
-        safe_location.getZ(),
-        target.getRotation(),
+        current_nozzle.getZ(),
+        current_nozzle.getRotation(),
     )
-    move_direct(movable, xy_target)
-    move_direct(movable, target)
+    converted_target = nozzle.toHeadLocation(
+        logical_xy_target,
+        current_nozzle,
+        LocationOption.SuppressDynamicCompensation
+    )
+    raw_xy_target = mm_loc(
+        converted_target.getX(),
+        converted_target.getY(),
+        current_head.getZ(),
+        current_head.getRotation(),
+    )
+
+    pairwise_head_move(
+        nozzle, raw_xy_target, speed, "XY-only", logger=logger)
+
+
+def pairwise_move_z_only_no_comp(nozzle, target_z, speed, logger=None):
+    current_nozzle = nozzle.getLocation().convertToUnits(
+        LengthUnit.Millimeters)
+    current_head = nozzle.toHeadLocation(current_nozzle)
+
+    logical_z_target = mm_loc(
+        current_nozzle.getX(),
+        current_nozzle.getY(),
+        float(target_z),
+        current_nozzle.getRotation(),
+    )
+    converted_target = nozzle.toHeadLocation(
+        logical_z_target,
+        current_nozzle,
+        LocationOption.SuppressDynamicCompensation
+    )
+    raw_z_target = mm_loc(
+        current_head.getX(),
+        current_head.getY(),
+        converted_target.getZ(),
+        current_head.getRotation(),
+    )
+
+    pairwise_head_move(
+        nozzle, raw_z_target, speed, "Z-only", logger=logger)
+
+
+def pairwise_move_to_safe_z(nozzle, config, speed, logger=None):
+    effective_safe_z = length_to_mm(nozzle.getEffectiveSafeZ())
+    if effective_safe_z is None:
+        effective_safe_z = safe_travel_z_for_config(config)
+    log_msg(logger, "Pairwise safe-Z target: %.6f" % effective_safe_z)
+    pairwise_move_z_only_no_comp(
+        nozzle, effective_safe_z, speed, logger=logger)
+    return get_movable_location(nozzle)
+
+
+def move_pairwise_180_at_safe_z(movable, target, logger=None, speed=None,
+        z_speed=None):
+    target = target.convertToUnits(LengthUnit.Millimeters)
+    if z_speed is None:
+        z_speed = speed
+    log_msg(logger, "Pairwise placement phase: rotation only")
+    log_msg(logger, "Pairwise rotation pure A move start")
+    pairwise_rotate_only_no_comp(
+        movable, target.getRotation(), speed, logger=logger)
+    log_msg(logger, "Pairwise placement phase: XY only")
+    pairwise_move_xy_only_no_comp(
+        movable, target, speed, logger=logger)
+    log_msg(logger, "Pairwise placement phase: Z only down")
+    pairwise_move_z_only_no_comp(
+        movable, target.getZ(), z_speed, logger=logger)
+# def move_pairwise_180_at_safe_z(movable, target, logger=None):
+#     """Keep the pairwise 180-degree rotation separate from tiny XY corrections."""
+#     target = target.convertToUnits(LengthUnit.Millimeters)
+
+#     # Match MovableUtils safe-Z handling by lifting the complete head first. The
+#     # actual readback retains OpenPnP's effective safe Z for the following moves.
+#     movable.getHead().moveToSafeZ()
+#     wait_still(movable)
+#     safe_location = get_movable_location(movable)
+
+#     rotation_target = mm_loc(
+#         safe_location.getX(),
+#         safe_location.getY(),
+#         safe_location.getZ(),
+#         target.getRotation(),
+#     )
+#     log_msg(logger, "Pairwise 180 safe-Z rotation target: %s" % loc_to_log(rotation_target))
+#     move_direct(movable, rotation_target)
+
+#     xy_target = mm_loc(
+#         target.getX(),
+#         target.getY(),
+#         safe_location.getZ(),
+#         target.getRotation(),
+#     )
+#     move_direct(movable, xy_target)
+#     move_direct(movable, target)
 
 
 def resolve_motion_speed(config, category, default_value, logger=None):
@@ -123,7 +280,6 @@ def resolve_motion_speed(config, category, default_value, logger=None):
         "held_die_z": ["held_die_z_speed", "pairwise_motion_speed", "held_die_motion_speed"],
         "pick_z_extra": ["pick_z_extra_speed", "held_die_z_speed", "pairwise_motion_speed", "held_die_motion_speed"],
         "safe_travel": ["safe_travel_speed", "calibration_motion_speed", "normal_motion_speed"],
-        "empty_nozzle_rotation": ["empty_nozzle_rotation_speed"],
     }
     keys = key_sets.get(category, [])
     source = "default"
@@ -186,12 +342,18 @@ def held_die_speed(config):
     return resolve_motion_speed(config, "held_die", 0.60)["speed"]
 
 
+def held_die_z_speed(config):
+    return resolve_motion_speed(
+        config, "held_die_z", held_die_speed(config))["speed"]
+
+
+def safe_travel_speed(config):
+    return resolve_motion_speed(
+        config, "safe_travel", normal_motion_speed(config))["speed"]
+
+
 def normal_motion_speed(config):
     return resolve_motion_speed(config, "normal", 1.0)["speed"]
-
-
-def empty_nozzle_rotation_speed(config):
-    return resolve_motion_speed(config, "empty_nozzle_rotation", 0.20)["speed"]
 
 
 def get_movable_location(movable):
@@ -320,7 +482,8 @@ def get_pick_z_extra_mm(config):
     return z_extra
 
 
-def apply_pick_z_extra(nozzle, config, logger=None, speed=None):
+def apply_pick_z_extra(nozzle, config, logger=None, speed=None,
+        pairwise_phased_motion=False):
     before = get_movable_location(nozzle)
     z_extra = get_pick_z_extra_mm(config)
     if z_extra == 0.0:
@@ -345,7 +508,11 @@ def apply_pick_z_extra(nozzle, config, logger=None, speed=None):
     log_msg(logger, "Pick Z_EXTRA compression move: old Z %.6f target Z %.6f" % (
         float(before.getZ()), float(target.getZ())))
     log_msg(logger, "Pick Z_EXTRA compression target: %s" % loc_to_log(target))
-    move_direct_speed(nozzle, target, speed)
+    if pairwise_phased_motion:
+        pairwise_move_z_only_no_comp(
+            nozzle, target.getZ(), speed, logger=logger)
+    else:
+        move_direct_speed(nozzle, target, speed)
     after = get_movable_location(nozzle)
     z_error = float(after.getZ()) - float(target.getZ())
     tolerance = float(config.get(
@@ -1451,7 +1618,8 @@ def find_artifact_top(camera, nozzle, part, nominal_loc, config, logger=None):
     raise Exception("Artifact not found after bounded search: %s" % last_error)
 
 
-def pick_artifact_from_storage(nozzle, part, center_loc, config, angle_deg=0.0, safe_move=True, logger=None):
+def pick_artifact_from_storage(nozzle, part, center_loc, config, angle_deg=0.0,
+        safe_move=True, logger=None, pairwise_phased_motion=False):
     config = copy_pick_z_extra_config(copy_config(config), config)
     log_msg(logger, "Pick Z_EXTRA path enabled: %s" % str(bool(config.get("enable_pick_z_extra", False))))
     storage_pose = pose_from_config(config["storage_location"])
@@ -1469,7 +1637,23 @@ def pick_artifact_from_storage(nozzle, part, center_loc, config, angle_deg=0.0, 
         float(storage_pose.getZ()), float(config["part_height_mm"]), float(target.getZ())))
     log_msg(logger, "Pick descend target: %s" % loc_to_dict(target))
     try:
-        if safe_move:
+        if pairwise_phased_motion:
+            position_speed = normal_motion_speed(config)
+            rotation_speed = normal_motion_speed(config)
+            z_speed = held_die_z_speed(config)
+            log_msg(logger, "Pairwise pickup phase: safe Z")
+            pairwise_move_to_safe_z(
+                nozzle, config, safe_travel_speed(config), logger=logger)
+            log_msg(logger, "Pairwise pickup phase: rotation only")
+            pairwise_rotate_only_no_comp(
+                nozzle, target.getRotation(), rotation_speed, logger=logger)
+            log_msg(logger, "Pairwise pickup phase: XY only")
+            pairwise_move_xy_only_no_comp(
+                nozzle, target, position_speed, logger=logger)
+            log_msg(logger, "Pairwise pickup phase: Z only down")
+            pairwise_move_z_only_no_comp(
+                nozzle, target.getZ(), z_speed, logger=logger)
+        elif safe_move:
             log_msg(logger, "Pick descend safe move uses OpenPnP safe-Z planner speed settings")
             move_safe(nozzle, target)
         else:
@@ -1488,7 +1672,14 @@ def pick_artifact_from_storage(nozzle, part, center_loc, config, angle_deg=0.0, 
             z_error, float(config.get("z_readback_tolerance_mm", 0.05))))
 
     try:
-        z_extra_result = apply_pick_z_extra(nozzle, config, logger=logger)
+        if pairwise_phased_motion:
+            z_extra_result = apply_pick_z_extra(
+                nozzle, config, logger=logger,
+                speed=held_die_z_speed(config),
+                pairwise_phased_motion=True)
+        else:
+            z_extra_result = apply_pick_z_extra(
+                nozzle, config, logger=logger)
     except Exception, e:
         raise Exception("Motion failure: %s" % e)
 
@@ -1499,7 +1690,11 @@ def pick_artifact_from_storage(nozzle, part, center_loc, config, angle_deg=0.0, 
 
     try:
         before_lift = get_movable_location(nozzle)
-        if str(transfer_z_mode) == "safe_z":
+        if pairwise_phased_motion:
+            log_msg(logger, "Pairwise pickup phase: Z only up to safe Z")
+            lifted = pairwise_move_to_safe_z(
+                nozzle, config, held_die_z_speed(config), logger=logger)
+        elif str(transfer_z_mode) == "safe_z":
             log_msg(logger, "Post-pick safe-Z lift uses OpenPnP default motion")
             lifted = lift_nozzle_to_safe_z(nozzle, config, logger=None)
         elif post_pick_lift_mm <= 0.0:
@@ -1558,8 +1753,17 @@ def place_artifact_to_cal_area(nozzle, part, target_center_loc, config, angle_de
         log_msg(logger, "Before place move readback: %s" % loc_to_log(before_transfer))
         log_msg(logger, "Intended place target: %s" % intended_place_target)
         if safe_move and separate_pairwise_180:
-            log_msg(logger, "Pairwise 180 place uses separate safe-Z rotation and XY moves")
-            move_pairwise_180_at_safe_z(nozzle, target, logger=logger)
+            log_msg(logger, "Pairwise placement phase: confirm safe Z")
+            pairwise_move_to_safe_z(
+                nozzle, config, held_die_z_speed(config), logger=logger)
+            log_msg(logger, "Pairwise placement uses rotation-only, XY-only, and Z-only phases")
+            move_pairwise_180_at_safe_z(
+                nozzle,
+                target,
+                logger=logger,
+                speed=held_die_speed(config),
+                z_speed=held_die_z_speed(config)
+            )
         elif safe_move:
             log_msg(logger, "Place move safe-Z uses OpenPnP planner default motion")
             move_safe(nozzle, target)
@@ -1631,7 +1835,11 @@ def place_artifact_to_cal_area(nozzle, part, target_center_loc, config, angle_de
 
     try:
         before_lift = get_movable_location(nozzle)
-        if str(transfer_z_mode) == "safe_z":
+        if safe_move and separate_pairwise_180:
+            log_msg(logger, "Pairwise placement phase: Z only up to safe Z")
+            lifted = pairwise_move_to_safe_z(
+                nozzle, config, held_die_z_speed(config), logger=logger)
+        elif str(transfer_z_mode) == "safe_z":
             log_msg(logger, "Post-place safe-Z lift uses OpenPnP default motion")
             lifted = lift_nozzle_to_safe_z(nozzle, config, logger=None)
         else:
@@ -1821,11 +2029,11 @@ def solve_head_offset(config, nozzle=None, camera=None, machine_obj=None, part=N
             for angle in angles:
                 log_msg(logger, "Pairwise angle start: pass %d angle %.4f" % (pass_index, angle))
                 old_center = current_center
-                old_pick_target = detection_pick_location(current_pose)
+                old_pick_target = current_pose["center_location"]
                 old_artifact_angle_deg = current_artifact_angle_deg
                 log_msg(logger, "Pairwise using carried pose: center %s angle %.6f" % (
                     loc_to_dict(old_center), old_artifact_angle_deg))
-                log_msg(logger, "Using top vision nozzle-pick target for pick: %s" % loc_to_log(old_pick_target))
+                log_msg(logger, "Pairwise using top vision camera-only center for pick: %s" % loc_to_log(old_pick_target))
                 log_msg(logger, "Using top vision camera-only center for measurement/math: %s" % loc_to_log(old_center))
                 pick_angle = float(angle)
                 place_angle = unwrapped_plus_180(pick_angle, config.get("pairwise_180_direction", 1.0))
@@ -1836,16 +2044,25 @@ def solve_head_offset(config, nozzle=None, camera=None, machine_obj=None, part=N
                     "post_pick_lift_mm": 0.0,
                     "transfer_z_mode": "relative",
                     "safe_travel_z": safe_travel_z_for_config(config),
+                    "safe_travel_speed": safe_travel_speed(config),
+                    "calibration_motion_speed": normal_motion_speed(config),
+                    "normal_motion_speed": normal_motion_speed(config),
                     "pairwise_motion_speed": held_die_speed(config),
                     "held_die_motion_speed": held_die_speed(config),
+                    "held_die_z_speed": held_die_z_speed(config),
                 }, config)
-                pick_result = pick_artifact_from_storage(nozzle, part, old_pick_target,
-                    pair_pick_config, pick_angle, logger=logger)
-                # Pairwise correction must place back to old_center. Nominal recentering is housekeeping only and must not enter dx/dy correction math.
-                log_msg(logger, "Pairwise measurement place target is old_center, not nominal center")
-                place_result = place_artifact_to_cal_area(
-                    nozzle, part, old_center, pairwise_transfer_config, place_angle, True,
-                    logger=logger, separate_pairwise_180=True)
+                log_msg(logger, "Pairwise: suppress dynamic compensation")
+                try:
+                    pick_result = pick_artifact_from_storage(
+                        nozzle, part, old_pick_target, pair_pick_config, pick_angle,
+                        logger=logger, pairwise_phased_motion=True)
+                    # Pairwise correction must place back to old_center. Nominal recentering is housekeeping only and must not enter dx/dy correction math.
+                    log_msg(logger, "Pairwise measurement place target is old_center, not nominal center")
+                    place_result = place_artifact_to_cal_area(
+                        nozzle, part, old_center, pairwise_transfer_config, place_angle, True,
+                        logger=logger, separate_pairwise_180=True)
+                finally:
+                    log_msg(logger, "Pairwise: restore normal compensation")
 
                 measured = find_artifact_top(camera, nozzle, part,
                     xy_with_base_pose(old_center, calibration_pose), config, logger=logger)
@@ -2010,8 +2227,8 @@ def solve_head_offset(config, nozzle=None, camera=None, machine_obj=None, part=N
                         log_msg(logger, "Pairwise housekeeping recenter to nominal center")
                         recenter_pick_angle = float(config.get(
                             "pairwise_recenter_pick_angle_deg", new_artifact_angle_deg))
-                        recenter_pick_target = detection_pick_location(measured)
-                        log_msg(logger, "Using top vision nozzle-pick target for pick: %s" % loc_to_log(recenter_pick_target))
+                        recenter_pick_target = measured["center_location"]
+                        log_msg(logger, "Pairwise recenter using top vision camera-only center for pick: %s" % loc_to_log(recenter_pick_target))
                         log_msg(logger, "Using top vision camera-only center for measurement/math: %s" % loc_to_log(new_center))
                         recenter_pick_config = copy_pick_z_extra_config({
                             "storage_location": config["calibration_location"],
@@ -2020,13 +2237,26 @@ def solve_head_offset(config, nozzle=None, camera=None, machine_obj=None, part=N
                             "post_pick_lift_mm": 0.0,
                             "transfer_z_mode": "relative",
                             "safe_travel_z": safe_travel_z_for_config(config),
+                            "safe_travel_speed": safe_travel_speed(config),
+                            "calibration_motion_speed": normal_motion_speed(config),
+                            "normal_motion_speed": normal_motion_speed(config),
                             "pairwise_motion_speed": held_die_speed(config),
                             "held_die_motion_speed": held_die_speed(config),
+                            "held_die_z_speed": held_die_z_speed(config),
                         }, config)
-                        pick_artifact_from_storage(nozzle, part, recenter_pick_target,
-                            recenter_pick_config, recenter_pick_angle, logger=logger)
-                        place_artifact_to_cal_area(nozzle, part, nominal_pairwise_center,
-                            pairwise_transfer_config, new_artifact_angle_deg, True, logger=logger)
+                        log_msg(logger, "Pairwise recenter: suppress dynamic compensation")
+                        try:
+                            pick_artifact_from_storage(
+                                nozzle, part, recenter_pick_target,
+                                recenter_pick_config, recenter_pick_angle,
+                                logger=logger, pairwise_phased_motion=True)
+                            place_artifact_to_cal_area(
+                                nozzle, part, nominal_pairwise_center,
+                                pairwise_transfer_config,
+                                new_artifact_angle_deg, True,
+                                logger=logger, separate_pairwise_180=True)
+                        finally:
+                            log_msg(logger, "Pairwise recenter: restore normal compensation")
                         recentered = find_artifact_top(camera, nozzle, part, calibration_pose, config, logger=logger)
                         pair_record["recenter_result_center_mm"] = loc_to_dict(recentered["center_location"])
                         pair_record["recenter_result_artifact_angle_deg"] = float(recentered["artifact_angle_deg"])

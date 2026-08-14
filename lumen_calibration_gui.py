@@ -408,26 +408,6 @@ def require_machine_execute():
     return machine_obj
 
 
-def calibration_motion_speed(cfg):
-    return float(cfg.get("calibration_motion_speed", cfg.get("normal_motion_speed", 1.0)))
-
-
-def set_machine_speed(machine_obj, speed, logger=None, label="Machine speed"):
-    try:
-        machine_obj.setSpeed(float(speed))
-        if logger:
-            logger("%s set to %.0f%%" % (label, float(speed) * 100.0))
-        return True
-    except Exception, e:
-        if logger:
-            logger("Unable to set %s to %.0f%%: %s" % (label, float(speed) * 100.0, e))
-    return False
-
-
-def restore_machine_speed(machine_obj, logger=None):
-    return set_machine_speed(machine_obj, 1.0, logger, "Machine speed restored")
-
-
 def numeric_value(value, default=None):
     try:
         if value is None:
@@ -1479,8 +1459,6 @@ class CalibrationGui(object):
                 offsets_changed = False
                 abort_cleanup = None
                 try:
-                    set_machine_speed(machine_obj, calibration_motion_speed(cfg),
-                                      self.append_log, "Calibration motion speed")
                     self.calibration_log("Abort checkpoint active")
                     result = head_solver.solve_head_offset(
                         cfg,
@@ -1498,7 +1476,6 @@ class CalibrationGui(object):
                         abort_cleanup = self.cleanup_nozzle_after_abort(nozzle, cfg)
                         offsets_changed = self.restore_original_offsets_after_abort(
                             nozzle, original_offsets)
-                    restore_machine_speed(machine_obj, self.append_log)
                 if aborted:
                     return {
                         "ok": False,
@@ -1564,8 +1541,6 @@ class CalibrationGui(object):
                 offsets_changed = False
                 abort_cleanup = None
                 try:
-                    set_machine_speed(machine_obj, calibration_motion_speed(cfg),
-                                      self.append_log, "Calibration motion speed")
                     self.calibration_log("Abort checkpoint active")
                     result = tip_metrology.run_full_sequence(
                         cfg, nozzle=nozzle, machine_obj=machine_obj, logger=self.calibration_log)
@@ -1578,7 +1553,6 @@ class CalibrationGui(object):
                         abort_cleanup = self.cleanup_nozzle_after_abort(nozzle, cfg)
                         offsets_changed = self.restore_original_offsets_after_abort(
                             nozzle, original_offsets)
-                    restore_machine_speed(machine_obj, self.append_log)
                 if aborted:
                     return {
                         "ok": False,

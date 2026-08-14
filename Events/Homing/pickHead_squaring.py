@@ -315,7 +315,7 @@ try:
 
     square_nozzle(machine, noz, angle)
     log("AfterHoming: tip squared and DRO zeroed.")
-    park_nozzle(machine, noz)
+    #park_nozzle(machine, noz)
 
 except SystemExit:
     pass
