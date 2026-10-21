@@ -8,7 +8,7 @@
 import sys
 
 from java.lang import Math, System, Thread
-from org.openpnp.model import Configuration, Location, Placement
+from org.openpnp.model import Configuration, LengthUnit, Location, Placement
 from org.openpnp.spi.MotionPlanner import CompletionType
 from org.openpnp.util import Cycles, MovableUtils, Utils2D
 from org.opencv.core import RotatedRect
@@ -18,9 +18,17 @@ JOB_LIB_DIR = SCRIPTS_ROOT + "/Events/_lib"
 if JOB_LIB_DIR not in sys.path:
     sys.path.insert(0, JOB_LIB_DIR)
 from job_runtime import GuiJobStateApi, JobRuntimeMonitor, JobStopRequested
+from board_pose import (ANCHOR_RESIDUAL_TOLERANCE_MM,
+                        apply_board_transform,
+                        fiducial_xy_residual_mm,
+                        make_fiducial_locked_transform,
+                        restore_board_state,
+                        snapshot_board_state)
 
 
 # ----------------- VISION CONFIG -----------------
+SKIP_PRE_ALIGN_CAMERA_CHECK = False #set to true to skip doing prealignment camera check
+
 MAX_NUDGE_MM = 4.0
 APPLY_ROTATION = True
 EXPECTED_ANGLE_DEG = 0.0
@@ -31,7 +39,8 @@ RESULT_STAGE_KEY = "results"
 RETRY_DELAY_MS = 250
 VISION_MEASUREMENT_ATTEMPTS = 2
 RECENTER_MAX_PASSES = 3
-RECENTER_TOLERANCE_MM = 0.02
+RECENTER_TOLERANCE_MM = 0.04
+FORCE_VISION_RECENTER = True
 
 FLIP_IMAGE_X = False
 FLIP_IMAGE_Y = True
@@ -283,6 +292,15 @@ def is_fiducial_placement(plc):
     return False
 
 
+def is_pre_align_fiducial(plc):
+    try:
+        fid_id = plc.getId()
+        return (fid_id is not None and
+                str(fid_id).lower().endswith("_prealign"))
+    except:
+        return False
+
+
 def get_vision_settings_for_fiducial(plc):
     for method in ["getFiducialVisionSettings", "getVisionSettings"]:
         try:
@@ -304,10 +322,12 @@ def get_vision_settings_for_fiducial(plc):
 
 def get_board_fiducial_placement_and_settings(board):
     placements = get_board_placements(board)
-    count = len(java_list_to_py(placements))
+    placements = java_list_to_py(placements)
+    count = len(placements)
     log("Board placements count: %d" % count)
 
-    for i, plc in enumerate(java_list_to_py(placements)):
+    fallback = None
+    for i, plc in enumerate(placements):
         try:
             if hasattr(plc, "isEnabled") and not plc.isEnabled():
                 continue
@@ -321,8 +341,18 @@ def get_board_fiducial_placement_and_settings(board):
             continue
         loc = plc.getLocation()
         label = object_name(plc) or "<unnamed>"
-        log("Selected fiducial placement '%s' at index %d." % (label, i))
-        return plc, loc, settings, label
+        candidate = (plc, loc, settings, label)
+        if is_pre_align_fiducial(plc):
+            log("Selected pre-align fiducial placement '%s' at index %d." %
+                (label, i))
+            return candidate
+        if fallback is None:
+            fallback = candidate
+
+    if fallback is not None:
+        log("No usable _preAlign fiducial found; falling back to fiducial placement '%s'." %
+            fallback[3])
+        return fallback
 
     raise Exception("No enabled board fiducial placement with vision settings found.")
 
@@ -445,8 +475,7 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
             center_dx, center_dy, px, py = rect_center_machine_offset(
                 cam_loc, upp_loc, rr, width, height)
 
-            # Match the original placement-starting correction convention:
-            # the measured machine-frame offset is applied as p_loc + dx/dy.
+            # Convert the detected pocket center into the machine/world frame.
             detected_loc = Location(
                 cam_loc.getUnits(),
                 cam_loc.getX() + center_dx,
@@ -454,14 +483,15 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
                 cam_loc.getZ(),
                 cam_loc.getRotation()
             )
-            p_loc_bl_units = p_loc.convertToUnits(bl_loc.getUnits())
-            detected_bl_units = detected_loc.convertToUnits(bl_loc.getUnits())
-            board_dx = detected_bl_units.getX() - p_loc_bl_units.getX()
-            board_dy = detected_bl_units.getY() - p_loc_bl_units.getY()
+            p_loc_mm = p_loc.convertToUnits(LengthUnit.Millimeters)
+            detected_mm = detected_loc.convertToUnits(LengthUnit.Millimeters)
+            board_dx_mm = detected_mm.getX() - p_loc_mm.getX()
+            board_dy_mm = detected_mm.getY() - p_loc_mm.getY()
 
-            log("[%s] attempt=%d pass=%d rects=%d chosen px=%.3f py=%.3f centered dx=%.6f dy=%.6f board dx=%.6f dy=%.6f angle=%.4f" %
+            log("[%s] attempt=%d pass=%d rects=%d chosen px=%.3f py=%.3f centered dx=%.6f dy=%.6f board dx=%.6f dy=%.6f mm angle=%.4f" %
                 (label, measurement_attempt, recenter_pass, len(rects),
-                 px, py, center_dx, center_dy, board_dx, board_dy, rr.angle))
+                 px, py, center_dx, center_dy, board_dx_mm, board_dy_mm,
+                 rr.angle))
 
             inside, view_dx, view_dy, half_x, half_y = \
                 detection_inside_initial_view(
@@ -473,36 +503,45 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
                 log("[%s] Rejected vision pass: %s" % (label, last_reject))
                 break
 
-            if abs(board_dx) > MAX_NUDGE_MM or abs(board_dy) > MAX_NUDGE_MM:
+            if (abs(board_dx_mm) > MAX_NUDGE_MM or
+                    abs(board_dy_mm) > MAX_NUDGE_MM):
                 last_reject = (
-                    "beyond MAX_NUDGE_MM board dx=%.6f dy=%.6f limit=%.6f" %
-                    (board_dx, board_dy, MAX_NUDGE_MM))
+                    "beyond MAX_NUDGE_MM board dx=%.6f dy=%.6f mm limit=%.6f" %
+                    (board_dx_mm, board_dy_mm, MAX_NUDGE_MM))
                 log("[%s] Rejected vision pass: %s" % (label, last_reject))
                 break
 
-            if (abs(center_dx) <= RECENTER_TOLERANCE_MM and
-                    abs(center_dy) <= RECENTER_TOLERANCE_MM):
-                new_rot = bl_loc.getRotation()
+            if (not FORCE_VISION_RECENTER or recenter_pass > 1) and abs(center_dx) <= RECENTER_TOLERANCE_MM and abs(center_dy) <= RECENTER_TOLERANCE_MM:
+                old_global_tx = bl.getLocalToGlobalTransform()
+                old_transform_angle = Utils2D.affineInfo(
+                    old_global_tx).rotationAngleDeg
+                new_rot = old_transform_angle
                 if APPLY_ROTATION:
                     new_rot = DESIGN_BOARD_ROT_DEG + (EXPECTED_ANGLE_DEG - rr.angle)
-                    log("[%s] Rotation newBoard=%.4f from measured=%.4f" %
+                    log("[%s] Target global transform angle=%.4f from measured=%.4f" %
                         (label, new_rot, rr.angle))
 
+                new_tx, old_transform_angle = make_fiducial_locked_transform(
+                    bl, fid_loc, detected_loc, new_rot)
                 new_bl = make_board_location(
                     bl_loc,
-                    bl_loc.getX() + board_dx,
-                    bl_loc.getY() + board_dy,
+                    bl_loc.getX(),
+                    bl_loc.getY(),
                     bl_loc.getZ(),
-                    new_rot
+                    bl_loc.getRotation()
                 )
 
-                log("[%s] Accepted centered fiducial correction -> board X=%.4f Y=%.4f R=%.4f" %
-                    (label, new_bl.getX(), new_bl.getY(), new_bl.getRotation()))
+                log("[%s] Accepted fiducial-locked affine pose; old global angle=%.4f new global angle=%.4f; raw board Location retained X=%.4f Y=%.4f R=%.4f" %
+                    (label, old_transform_angle, new_rot,
+                     new_bl.getX(), new_bl.getY(), new_bl.getRotation()))
 
                 return {
                     "boardLocation": new_bl,
-                    "dx": board_dx,
-                    "dy": board_dy,
+                    "boardTransform": new_tx,
+                    "fiducialLocation": fid_loc,
+                    "measuredFiducial": detected_loc,
+                    "dx": board_dx_mm,
+                    "dy": board_dy_mm,
                     "rotation": new_rot,
                     "angle": rr.angle,
                     "recenterPass": recenter_pass,
@@ -516,9 +555,10 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
                 log("[%s] Recenter pass %d moving camera to detected center: X=%.4f Y=%.4f" %
                     (label, recenter_pass,
                      detected_loc.getX(), detected_loc.getY()))
-                move_camera_to_detected_center(
-                    cam, detected_loc,
-                    "%s recenter pass %d" % (label, recenter_pass))
+                if center_dx or center_dy:
+                    move_camera_to_detected_center(
+                        cam, detected_loc,
+                        "%s recenter pass %d" % (label, recenter_pass))
             else:
                 log("[%s] Rejected vision attempt: %s" % (label, last_reject))
 
@@ -650,23 +690,34 @@ def run_placement_vision_only(job_obj, processor, bl, pl, prt):
     if board is None:
         raise Exception("boardLocation.getBoard() returned null.")
 
-    original_bl_loc = bl.getLocation()
+    original_bl_state = snapshot_board_state(bl)
     try:
         runtime_checkpoint("before pre-placement vision")
         measured = measure_board_fiducial_correction(
             mac, bl, board, prt, "pre-placement")
         runtime_checkpoint("after pre-placement vision")
-        corrected_bl_loc = measured["boardLocation"]
-        bl.setLocation(corrected_bl_loc)
+        apply_board_transform(bl, measured["boardTransform"])
+        corrected_bl_loc = bl.getLocation()
+        residual_x, residual_y, residual_loc = fiducial_xy_residual_mm(
+            bl, measured["fiducialLocation"],
+            measured["measuredFiducial"])
+        residual = Math.sqrt(residual_x * residual_x +
+                             residual_y * residual_y)
+        if residual > ANCHOR_RESIDUAL_TOLERANCE_MM:
+            raise Exception(
+                "Post-correction fiducial residual %.6f mm exceeds %.6f mm." %
+                (residual, ANCHOR_RESIDUAL_TOLERANCE_MM))
+        log("pre-placement post-correction fiducial residual dx=%.6f dy=%.6f mm; world=%s" %
+            (residual_x, residual_y, residual_loc))
         runtime_checkpoint("after applying corrected board pose")
         final_loc = Utils2D.calculateBoardPlacementLocation(bl, pl.getLocation())
-        log("Vision-only board update complete: board X=%.4f Y=%.4f R=%.4f; placement X=%.4f Y=%.4f R=%.4f" %
+        log("Vision-only board affine update complete: raw board Location X=%.4f Y=%.4f R=%.4f; effective placement X=%.4f Y=%.4f R=%.4f" %
             (corrected_bl_loc.getX(), corrected_bl_loc.getY(),
              corrected_bl_loc.getRotation(), final_loc.getX(),
              final_loc.getY(), final_loc.getRotation()))
     except JobStopRequested, stop_e:
         try:
-            bl.setLocation(original_bl_loc)
+            restore_board_state(bl, original_bl_state)
             log("Restored original board pose for user-requested stop.")
         except Exception, restore_e:
             log_err("Could not restore board pose during stop: %s" % restore_e)
@@ -675,7 +726,7 @@ def run_placement_vision_only(job_obj, processor, bl, pl, prt):
         raise
     except Exception, e:
         try:
-            bl.setLocation(original_bl_loc)
+            restore_board_state(bl, original_bl_state)
             log("Restored original board pose after placement-time vision failure.")
         except Exception, restore_e:
             log_err("Could not restore board pose: %s" % restore_e)
@@ -770,9 +821,12 @@ try:
     enforce_dispense_prerequisites(
         job, jobProcessor, boardLocation, placement)
     runtime_checkpoint("dispense prerequisites satisfied")
-    run_placement_vision_only(
-        job, jobProcessor, boardLocation, placement,
-        part if "part" in globals() else placement.getPart())
+    if SKIP_PRE_ALIGN_CAMERA_CHECK:
+        log("Pre-align camera check skipped; dispense prerequisites are complete.")
+    else:
+        run_placement_vision_only(
+            job, jobProcessor, boardLocation, placement,
+            part if "part" in globals() else placement.getPart())
 except JobStopRequested, stop_e:
     log("User-requested stop received: %s" % stop_e)
     RUNTIME_MONITOR.begin_cleanup()

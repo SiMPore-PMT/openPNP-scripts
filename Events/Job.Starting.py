@@ -1,7 +1,6 @@
 # Job.Starting.py
 #
-# Dispense-first job flow. Before OpenPnP picks any parts, visit every pending
-# Dispense placement, correct its board pose from the pocket fiducial, and dispense.
+# Dispense-first flow with pocket-fiducial board-pose correction.
 
 import sys
 
@@ -20,16 +19,27 @@ JOB_LIB_DIR = SCRIPTS_ROOT + "/Events/_lib"
 if JOB_LIB_DIR not in sys.path:
     sys.path.insert(0, JOB_LIB_DIR)
 from job_runtime import GuiJobStateApi, JobRuntimeMonitor, JobStopRequested
+from pre_dispense_flush import run_pre_dispense_flush
+from board_pose import (ANCHOR_RESIDUAL_TOLERANCE_MM,
+                        apply_measured_board_pose,
+                        make_fiducial_locked_transform,
+                        restore_board_state,
+                        set_location_preserving_transform,
+                        snapshot_board_state,
+                        xy_shift_mm)
 
 
-# ----------------- FLOW CONFIG -----------------
+# FLOW CONFIG
+FLUSH_ENABLED = True  # True = flush on the dap-off pad before every job start.
+FLUSH_PULSES = 4       # Number of DISPENSE_PULSE_MS pulses in the flush.
+
 SKIP_DISPENSE = False
-DRY_SECOND_PASS = True
+DRY_SECOND_PASS = False #Set to True to run a second pass w/out dispensing, smoths out pdms (sometimes pushese it over the edge)
 POST_DISPENSE_IMAGE_CAPTURE_ENABLED = False
 POST_DISPENSE_IMAGING_DELAY_MS = 250 #1000
 
 
-# ----------------- VISION CONFIG -----------------
+# VISION CONFIG
 MAX_NUDGE_MM           = 4.0
 APPLY_ROTATION         = True
 EXPECTED_ANGLE_DEG     = 0.0
@@ -42,12 +52,13 @@ RETRY_DELAY_MS         = 250
 VISION_MEASUREMENT_ATTEMPTS = 2
 RECENTER_MAX_PASSES    = 3
 RECENTER_TOLERANCE_MM  = 0.02
+FORCE_VISION_RECENTER  = False
 
 FLIP_IMAGE_X = False
 FLIP_IMAGE_Y = True
 
 
-# ----------------- DISPENSE CONFIG -----------------
+# DISPENSE CONFIG
 DISPENSE_HEAD_NAME      = "Dispense Head"
 DISPENSE_ACTUATOR_NAME  = "GlueDispense"
 
@@ -55,18 +66,16 @@ DISPENSE_Z_OFFSET_MM    = 0.1
 INTER_PAD_LIFT_MM       = 0.05
 DISPENSE_SAFE_Z_MM      = 25.0
 
-# ----------------- VORON Z PROBE CONFIG -----------------
+# VORON Z PROBE CONFIG
 ENABLE_VORON_Z_PROBE            = True
 VORON_OFFSET_MM                 = 0.8
 VORON_ACTUATOR_NAME             = "Voron Z Probe"
-VORON_CORNER_INSET_MM           = 0.2
+VORON_CORNER_INSET_MM           = 0.1
 VORON_START_ABOVE_MM            = 1.0
 VORON_MAX_DESCENT_MM            = 5.0
 VORON_PROBE_SPEED_FACTOR        = 1
 
-# Marlin G-code feed rates are in mm/min. The coarse G38.2 finds the pad;
-# each optional fine tap retracts a small amount and probes the same spot
-# again. Set VORON_FINE_TAP_COUNT to 0 to use the coarse contact alone.
+# Marlin feed rates are mm/min; zero fine taps uses coarse contact only.
 VORON_COARSE_FEED_MM_PER_MIN    = 3000.0
 VORON_FINE_FEED_MM_PER_MIN      = 500.0
 VORON_RETRACT_FEED_MM_PER_MIN   = 5000.0
@@ -86,8 +95,8 @@ ACTUATOR_SETTLE_MS      = 0
 
 PAD_SKIP_NAMES          = set()
 
-EXTRA_FIRST_PAD_DOTS = 2
-EXTRA_FIRST_PAD_DOT_SPACING_MM = -0.30
+EXTRA_FIRST_PAD_DOTS = 0
+EXTRA_FIRST_PAD_DOT_SPACING_MM = -0.40
 
 PREVENT_CORNER_CUTTING = True
 CORNER_INSERT_TOLERANCE_MM = 0.05
@@ -466,6 +475,11 @@ def get_board_fiducial_placement_and_settings(board):
             pass
         if not is_fiducial_placement(plc):
             continue
+        try:
+            if str(plc.getId()).lower().endswith("_prealign"):
+                continue
+        except:
+            pass
         settings = get_vision_settings_for_fiducial(plc)
         if settings is None:
             log("Fiducial placement index %d has no vision settings; skipping." % i)
@@ -517,7 +531,6 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
     if pipeline is None:
         raise Exception("Fiducial vision settings pipeline is null.")
 
-    bl_loc = bl.getLocation()
     p_loc = Utils2D.calculateBoardPlacementLocation(bl, fid_loc)
     head = mac.getDefaultHead()
     cam = head.getDefaultCamera()
@@ -596,8 +609,6 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
             center_dx, center_dy, px, py = rect_center_machine_offset(
                 cam_loc, upp_loc, rr, width, height)
 
-            # Match the original placement-starting correction convention:
-            # the measured machine-frame offset is applied as p_loc + dx/dy.
             detected_loc = Location(
                 cam_loc.getUnits(),
                 cam_loc.getX() + center_dx,
@@ -605,14 +616,15 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
                 cam_loc.getZ(),
                 cam_loc.getRotation()
             )
-            p_loc_bl_units = p_loc.convertToUnits(bl_loc.getUnits())
-            detected_bl_units = detected_loc.convertToUnits(bl_loc.getUnits())
-            board_dx = detected_bl_units.getX() - p_loc_bl_units.getX()
-            board_dy = detected_bl_units.getY() - p_loc_bl_units.getY()
+            p_loc_mm = p_loc.convertToUnits(LengthUnit.Millimeters)
+            detected_mm = detected_loc.convertToUnits(LengthUnit.Millimeters)
+            board_dx_mm = detected_mm.getX() - p_loc_mm.getX()
+            board_dy_mm = detected_mm.getY() - p_loc_mm.getY()
 
-            log("[%s] attempt=%d pass=%d rects=%d chosen px=%.3f py=%.3f centered dx=%.6f dy=%.6f board dx=%.6f dy=%.6f angle=%.4f" %
+            log("[%s] attempt=%d pass=%d rects=%d chosen px=%.3f py=%.3f centered dx=%.6f dy=%.6f board dx=%.6f dy=%.6f mm angle=%.4f" %
                 (label, measurement_attempt, recenter_pass, len(rects),
-                 px, py, center_dx, center_dy, board_dx, board_dy, rr.angle))
+                 px, py, center_dx, center_dy, board_dx_mm, board_dy_mm,
+                 rr.angle))
 
             inside, view_dx, view_dy, half_x, half_y = \
                 detection_inside_initial_view(
@@ -624,36 +636,35 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
                 log("[%s] Rejected vision pass: %s" % (label, last_reject))
                 break
 
-            if abs(board_dx) > MAX_NUDGE_MM or abs(board_dy) > MAX_NUDGE_MM:
+            if (abs(board_dx_mm) > MAX_NUDGE_MM or
+                    abs(board_dy_mm) > MAX_NUDGE_MM):
                 last_reject = (
-                    "beyond MAX_NUDGE_MM board dx=%.6f dy=%.6f limit=%.6f" %
-                    (board_dx, board_dy, MAX_NUDGE_MM))
+                    "beyond MAX_NUDGE_MM board dx=%.6f dy=%.6f mm limit=%.6f" %
+                    (board_dx_mm, board_dy_mm, MAX_NUDGE_MM))
                 log("[%s] Rejected vision pass: %s" % (label, last_reject))
                 break
 
-            if (abs(center_dx) <= RECENTER_TOLERANCE_MM and
-                    abs(center_dy) <= RECENTER_TOLERANCE_MM):
-                new_rot = bl_loc.getRotation()
+            if (not FORCE_VISION_RECENTER or recenter_pass > 1) and abs(center_dx) <= RECENTER_TOLERANCE_MM and abs(center_dy) <= RECENTER_TOLERANCE_MM:
+                old_global_tx = bl.getLocalToGlobalTransform()
+                old_transform_angle = Utils2D.affineInfo(
+                    old_global_tx).rotationAngleDeg
+                new_rot = old_transform_angle
                 if APPLY_ROTATION:
                     new_rot = DESIGN_BOARD_ROT_DEG + (EXPECTED_ANGLE_DEG - rr.angle)
-                    log("[%s] Rotation newBoard=%.4f from measured=%.4f" %
+                    log("[%s] Target global transform angle=%.4f from measured=%.4f" %
                         (label, new_rot, rr.angle))
 
-                new_bl = make_board_location(
-                    bl_loc,
-                    bl_loc.getX() + board_dx,
-                    bl_loc.getY() + board_dy,
-                    bl_loc.getZ(),
-                    new_rot
-                )
-
-                log("[%s] Accepted centered fiducial correction -> board X=%.4f Y=%.4f R=%.4f" %
-                    (label, new_bl.getX(), new_bl.getY(), new_bl.getRotation()))
+                new_tx, old_transform_angle = make_fiducial_locked_transform(
+                    bl, fid_loc, detected_loc, new_rot)
+                log("[%s] Accepted fiducial-locked affine pose; old global angle=%.4f new global angle=%.4f" %
+                    (label, old_transform_angle, new_rot))
 
                 return {
-                    "boardLocation": new_bl,
-                    "dx": board_dx,
-                    "dy": board_dy,
+                    "boardTransform": new_tx,
+                    "fiducialLocation": fid_loc,
+                    "measuredFiducial": detected_loc,
+                    "dx": board_dx_mm,
+                    "dy": board_dy_mm,
                     "rotation": new_rot,
                     "angle": rr.angle,
                     "recenterPass": recenter_pass,
@@ -667,9 +678,10 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
                 log("[%s] Recenter pass %d moving camera to detected center: X=%.4f Y=%.4f" %
                     (label, recenter_pass,
                      detected_loc.getX(), detected_loc.getY()))
-                move_camera_to_detected_center(
-                    cam, detected_loc,
-                    "%s recenter pass %d" % (label, recenter_pass))
+                if center_dx or center_dy:
+                    move_camera_to_detected_center(
+                        cam, detected_loc,
+                        "%s recenter pass %d" % (label, recenter_pass))
             else:
                 log("[%s] Rejected vision attempt: %s" % (label, last_reject))
 
@@ -1011,30 +1023,17 @@ def choose_corner_xy(items, index, units):
         current_edges = point_edge_flags(current_item, bounds, tolerance)
         next_edges = point_edge_flags(next_item, bounds, tolerance)
 
-        # Vertical edge -> horizontal edge:
-        # keep moving vertically first, then turn horizontally.
-        #
-        # Right edge going up to top edge:
-        #   current on right, next on top
-        #   corner = current.x, next.y
-        #   motion = up, then left
+        # Vertical-to-horizontal: finish the vertical leg first.
         if ((current_edges["left"] or current_edges["right"]) and
                 (next_edges["top"] or next_edges["bottom"])):
             return current_item["x"], next_item["y"]
 
-        # Horizontal edge -> vertical edge:
-        # keep moving horizontally first, then turn vertically.
-        #
-        # Top edge going left to left edge:
-        #   current on top, next on left
-        #   corner = next.x, current.y
-        #   motion = left, then down
+        # Horizontal-to-vertical: finish the horizontal leg first.
         if ((current_edges["top"] or current_edges["bottom"]) and
                 (next_edges["left"] or next_edges["right"])):
             return next_item["x"], current_item["y"]
 
-    # Fallback: preserve the incoming tangent direction using only real pad
-    # items. Do not use inserted corner items for this decision.
+    # Preserve the real-pad tangent; ignore inserted corners.
     previous_item = find_previous_real_pad_item(items, index)
 
     if previous_item is not None:
@@ -1064,8 +1063,7 @@ def should_insert_corner_waypoint(current_item, next_item, units):
     local_x1 = next_item.get("local_x")
     local_y1 = next_item.get("local_y")
 
-    # Decide from footprint-local coordinates when available. Same physical
-    # footprint edge keeps one local axis unchanged even after board rotation.
+    # Use footprint-local coordinates so board rotation does not change the edge.
     if (local_x0 is not None and local_y0 is not None and
             local_x1 is not None and local_y1 is not None):
         local_dx = local_x1 - local_x0
@@ -1180,19 +1178,13 @@ def make_final_closing_drag_points(planned_path, current_index,
             current_edges = point_edge_flags(current_item, bounds, tolerance)
             first_edges = point_edge_flags(first_item, bounds, tolerance)
 
-            # Vertical edge -> horizontal edge:
-            # continue vertical first.
+            # Continue vertical first.
             if ((current_edges["left"] or current_edges["right"]) and
                     (first_edges["top"] or first_edges["bottom"])):
                 corner_x = current_item["x"]
                 corner_y = first_item["y"]
 
-            # Horizontal edge -> vertical edge:
-            # continue horizontal first.
-            #
-            # Top edge closing to first pad on left edge:
-            #   corner = first.x, current.y
-            #   motion = left, then down
+            # Continue horizontal first, including the closing edge.
             elif ((current_edges["top"] or current_edges["bottom"]) and
                     (first_edges["left"] or first_edges["right"])):
                 corner_x = first_item["x"]
@@ -1488,12 +1480,9 @@ def run_voron_g38_sequence(dispense_head, actuator):
     position_saved = False
 
     try:
-        # G60 saves the exact pre-probe position. All probe/retract distances
-        # below are relative; G90 is intentionally restored before G61.
+        # G60 saves the pre-probe position; restore G90 before G61.
         send_voron_gcode(driver, "M400", "Voron setup")
-        # OpenPnP leaves M204 modal after planned moves. Its final tiny
-        # positioning correction can leave acceleration near S11, causing the
-        # same G38.2 feed to run much slower from one point to the next.
+        # Override OpenPnP's modal M204 before G38.2.
         send_voron_gcode(
             driver, "M204 S%.3f" % probe_accel, "Voron setup")
         send_voron_gcode(driver, "G60 S0", "Voron setup")
@@ -1526,8 +1515,7 @@ def run_voron_g38_sequence(dispense_head, actuator):
     except Exception, e:
         sequence_error = e
     finally:
-        # Never leave Marlin in relative mode. Restore the position saved by
-        # G60 so OpenPnP and the controller resume from the same known Z.
+        # Restore absolute mode and the G60 position.
         restore_commands = ["G90"]
         if position_saved:
             restore_commands.append("G61 S0 Z F%.3f" % restore_feed)
@@ -1631,7 +1619,7 @@ def update_board_z_from_voron(bl, probe_point, probe_result):
         old_location.getY(),
         old_location.getZ() + correction_in_board_units,
         old_location.getRotation())
-    bl.setLocation(new_location)
+    set_location_preserving_transform(bl, new_location)
 
     log("Voron board Z update old board Z=%.6f, predicted probe world Z=%.6f mm, measured surface Z=%.6f mm, correction=%.6f mm, new board Z=%.6f; X/Y/R unchanged." %
         (old_location.getZ(), old_world_z_mm, surface_z_mm,
@@ -2193,7 +2181,7 @@ def dispense_current_placement(mac, board, bl, current_placement,
                 current_bl_mm.getRotation())
             cached_location = cached_location_mm.convertToUnits(
                 current_bl_loc.getUnits())
-            bl.setLocation(cached_location)
+            set_location_preserving_transform(bl, cached_location)
             log("Voron reused cached board Z=%.6f mm for BoardLocation key=%s; corrected X/Y/R retained." %
                 (cached["board_z_mm"], probe_key))
         else:
@@ -2211,9 +2199,20 @@ def dispense_current_placement(mac, board, bl, current_placement,
             log("Voron cached successful measurement for BoardLocation key=%s." %
                 probe_key)
 
-    # Recalculate the anchor and every pad world coordinate using either the
-    # measured/cached Voron Z or the saved BoardLocation Z.
-    fid_world = Utils2D.calculateBoardPlacementLocation(bl, fid_loc)
+    # Recalculate world coordinates with the measured/cached or saved Z. The
+    # Z update must not disturb the already-corrected XY affine pose.
+    fid_world_after_z = Utils2D.calculateBoardPlacementLocation(bl, fid_loc)
+    z_update_dx_mm, z_update_dy_mm = xy_shift_mm(
+        fid_world, fid_world_after_z)
+    z_update_xy_error = Math.sqrt(z_update_dx_mm * z_update_dx_mm +
+                                  z_update_dy_mm * z_update_dy_mm)
+    if z_update_xy_error > ANCHOR_RESIDUAL_TOLERANCE_MM:
+        raise Exception(
+            "Voron Z update changed board fiducial XY by %.6f mm." %
+            z_update_xy_error)
+    log("Voron/cached-Z XY preservation residual dx=%.6f dy=%.6f mm." %
+        (z_update_dx_mm, z_update_dy_mm))
+    fid_world = fid_world_after_z
     units = fid_world.getUnits()
     base_z = fid_world.getZ() + mm_to_units(DISPENSE_Z_OFFSET_MM, units)
     lift_z = base_z + mm_to_units(INTER_PAD_LIFT_MM, units)
@@ -2743,15 +2742,17 @@ def run_dispense_first_job(job_obj, processor):
 
         label = ("dispense %d/%d board=%s placement=%s" %
                  (index + 1, len(pending), object_name(bl), object_name(pl)))
-        original_bl_loc = bl.getLocation()
+        original_bl_state = snapshot_board_state(bl)
         log("[%s] Starting." % label)
 
         try:
             measured = measure_board_fiducial_correction(
                 mac, bl, board, prt, label)
             runtime_checkpoint("%s after fiducial correction" % label)
-            corrected_bl_loc = measured["boardLocation"]
-            bl.setLocation(corrected_bl_loc)
+            residual_x, residual_y = apply_measured_board_pose(
+                bl, measured)
+            log("%s post-correction fiducial residual dx=%.6f dy=%.6f mm" %
+                (label, residual_x, residual_y))
             runtime_checkpoint("%s after applying corrected board pose" % label)
 
             dispensed = dispense_current_placement(
@@ -2763,14 +2764,11 @@ def run_dispense_first_job(job_obj, processor):
             mark_dispense_complete(job_obj, job_placement)
             successful += 1
             dispensed_since_dap = True
-            retained_bl_loc = bl.getLocation()
-            log("[%s] Complete; board pose retained X=%.4f Y=%.4f Z=%.4f R=%.4f." %
-                (label, retained_bl_loc.getX(), retained_bl_loc.getY(),
-                 retained_bl_loc.getZ(), retained_bl_loc.getRotation()))
+            log("[%s] Complete; affine board pose active." % label)
 
         except JobStopRequested, stop_e:
             try:
-                bl.setLocation(original_bl_loc)
+                restore_board_state(bl, original_bl_state)
                 log("[%s] Restored original board pose for user-requested stop." %
                     label)
             except Exception, restore_e:
@@ -2789,7 +2787,7 @@ def run_dispense_first_job(job_obj, processor):
             safe_retract_dispense_head(
                 mac, "dispense-first placement failure")
             try:
-                bl.setLocation(original_bl_loc)
+                restore_board_state(bl, original_bl_state)
                 log("[%s] Restored original board pose after failure." % label)
             except Exception, restore_e:
                 log_err("[%s] Could not restore board pose: %s" %
@@ -2818,6 +2816,7 @@ RUNTIME_MONITOR = JobRuntimeMonitor(
 try:
     RUNTIME_MONITOR.start()
     runtime_checkpoint("dispense-first script start")
+    run_pre_dispense_flush(Configuration.get().getMachine(), globals())
     run_dispense_first_job(job, jobProcessor)
 except JobStopRequested, stop_e:
     log("User-requested stop received: %s" % stop_e)

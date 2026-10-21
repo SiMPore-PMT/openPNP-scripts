@@ -8,6 +8,7 @@ import os
 import sys
 
 from java.awt import BorderLayout, Color, Dimension, FlowLayout, Font, GridBagConstraints, GridBagLayout, Insets
+from java.awt.event import WindowAdapter
 from java.lang import Runnable, Throwable
 from java.util.concurrent import Callable
 from java.util.concurrent.atomic import AtomicBoolean
@@ -266,6 +267,8 @@ class NeedleCalibrationGui2(object):
         self.last_z_proposal = None
         self.last_xy_proposal = None
         self.last_xyz_proposal = None
+        self.original_offsets_snapshot = None
+        self.pending_calibration_state = None
         self.revert_offsets_snapshot = None
 
         self.status_area = JTextArea()
@@ -279,7 +282,8 @@ class NeedleCalibrationGui2(object):
         self.dirty_label = JLabel("")
 
     def build(self):
-        self.frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
+        self.frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE)
+        self.frame.addWindowListener(self.CloseListener(self))
         self.frame.setMinimumSize(Dimension(1120, 760))
         root = JPanel(BorderLayout(8, 8))
         root.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8))
@@ -301,6 +305,13 @@ class NeedleCalibrationGui2(object):
         self.frame.pack()
         self.frame.setLocationRelativeTo(None)
         self.frame.setVisible(True)
+
+    class CloseListener(WindowAdapter):
+        def __init__(self, gui_obj):
+            self.gui_obj = gui_obj
+
+        def windowClosing(self, event):
+            self.gui_obj.request_close()
 
     def build_top(self):
         panel = JPanel(BorderLayout(6, 4))
@@ -497,8 +508,10 @@ class NeedleCalibrationGui2(object):
             ("local_lift_mm", "Local Lift mm"),
             ("outside_recover_step_mm", "Outside Recover Step"),
             ("outside_recover_max_mm", "Outside Recover Max"),
-            ("max_fit_rms_mm", "Max Fit RMS mm"),
-            ("max_fit_error_mm", "Max Fit Error mm"),
+            ("max_fit_rms_mm", "Circle Fit RMS Warning mm",
+                "diagnostic warning limit; only blocks calibration if circle-center fallback is used"),
+            ("max_fit_error_mm", "Circle Fit Max Error Warning mm",
+                "diagnostic warning limit; only blocks calibration if circle-center fallback is used"),
             ("max_center_error_mm", "Max Center Error mm"),
             ("log_every_step", "Log Every Step"),
             ("log_step_interval", "Log Step Interval"),
@@ -703,6 +716,10 @@ class NeedleCalibrationGui2(object):
         self.append_log("%s: %s" % (title, err))
         JOptionPane.showMessageDialog(self.frame, str(err), title, JOptionPane.ERROR_MESSAGE)
 
+    def has_pending_temporary_z(self):
+        state = self.pending_calibration_state or {}
+        return bool(state.get("temporary_z_active", False))
+
     def set_state(self, state):
         self.state = state
         self.state_label.setText(state)
@@ -723,6 +740,9 @@ class NeedleCalibrationGui2(object):
             (self.last_xyz_proposal is not None or
              (self.last_z_proposal is not None and self.last_xy_proposal is not None)))
         self.revert_btn.setEnabled((not self.worker_running) and self.revert_offsets_snapshot is not None)
+        if hasattr(self, "save_machine_btn"):
+            self.save_machine_btn.setEnabled((not self.worker_running) and
+                not self.has_pending_temporary_z())
 
     def abort_action(self):
         if not self.worker_running or not self.abort_enabled.get():
@@ -746,7 +766,12 @@ class NeedleCalibrationGui2(object):
                 changed = True
                 break
         if changed:
-            needle_calibration.set_offsets_from_dict(nozzle, before)
+            needle_calibration.set_offsets_and_verify(nozzle, before, self.append_log)
+            needle_calibration.synchronize_coordinate_system(nozzle, None, self.append_log)
+        verified = needle_calibration.loc_to_dict(
+            nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters))
+        if not needle_calibration.offsets_match(verified, before):
+            raise Exception("Abort offset restoration did not verify: %s" % verified)
         self.append_log("Abort complete; original head offsets restored")
         return changed
 
@@ -1132,10 +1157,15 @@ class NeedleCalibrationGui2(object):
             cfg = self.collect_config(False)
             nozzle = needle_calibration.find_nozzle(cfg, None, get_machine())
             offsets = nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters)
-            self.offsets_area.setText("Nozzle: %s\nX %.4f  Y %.4f  Z %.4f  R %.4f" %
+            temporary_note = ""
+            if self.has_pending_temporary_z():
+                temporary_note = "\nTEMPORARY Z ACTIVE - not committed"
+            self.offsets_area.setText("Nozzle: %s\nX %.4f  Y %.4f  Z %.4f  R %.4f%s" %
                 (object_name(nozzle), offsets.getX(), offsets.getY(),
-                 offsets.getZ(), offsets.getRotation()))
-            self.status_area.setText("Ready")
+                 offsets.getZ(), offsets.getRotation(), temporary_note))
+            self.status_area.setText("Ready%s" %
+                (" - temporary Z active (not saved)" if self.has_pending_temporary_z()
+                 else ""))
         except Exception as e:
             self.offsets_area.setText("Unavailable: %s" % e)
 
@@ -1264,12 +1294,21 @@ class NeedleCalibrationGui2(object):
         self.set_state(READY)
 
     def measure_action(self, action):
+        if self.has_pending_temporary_z():
+            self.set_state(ERROR)
+            self.show_error("Pending Calibration",
+                "A full XYZ result has a temporary Z offset active. "
+                "Apply XYZ or use Revert Offsets before starting another calibration.")
+            return
         try:
             cfg = self.collect_config(True)
         except Exception as e:
             self.set_state(ERROR)
             self.show_error("Measure setup failed", e)
             return
+        self.last_z_proposal = None
+        self.last_xy_proposal = None
+        self.last_xyz_proposal = None
         self.hide_measurement_results()
         self.run_worker("Measure %s" % action,
             lambda: self.do_measure(action, cfg), self.measure_done, abortable=True)
@@ -1336,7 +1375,10 @@ class NeedleCalibrationGui2(object):
                     "; ".join(cleanup.get("errors") or ["Unknown abort cleanup error"]))
             self.append_log(result.get("message"))
             return
-        self.revert_offsets_snapshot = payload.get("before")
+        before = payload.get("before")
+        if before is not None:
+            self.original_offsets_snapshot = deep_copy(before)
+            self.revert_offsets_snapshot = deep_copy(before)
         if result is not None and result.get("ok", False):
             if result.get("stage") == "z":
                 self.last_z_proposal = result.get("proposal")
@@ -1346,7 +1388,20 @@ class NeedleCalibrationGui2(object):
                 self.last_xyz_proposal = result.get("proposal")
                 self.last_z_proposal = result.get("z", {}).get("proposal")
                 self.last_xy_proposal = result.get("post_xy", {}).get("proposal")
+                state = result.get("calibration_state") or {}
+                if state.get("temporary_z_active", False):
+                    self.original_offsets_snapshot = deep_copy(
+                        state.get("original_offsets") or before)
+                    self.revert_offsets_snapshot = deep_copy(
+                        self.original_offsets_snapshot)
+                    self.pending_calibration_state = deep_copy(state)
+                else:
+                    self.pending_calibration_state = None
             self.show_measurement_results(result, payload.get("before"))
+        elif result is not None and result.get("stage") == "full":
+            state = result.get("calibration_state") or {}
+            self.pending_calibration_state = (deep_copy(state)
+                if state.get("temporary_z_active", False) else None)
         self.result_area.setText(self.format_result(result))
         self.refresh_current_values()
         self.set_state(READY if result is not None and result.get("ok", False) else ERROR)
@@ -1399,13 +1454,20 @@ class NeedleCalibrationGui2(object):
                         result = needle_calibration.apply_xy(cfg, nozzle, proposal, gui_self.append_log)
                     else:
                         result = needle_calibration.apply_xyz(cfg, nozzle, proposal, gui_self.append_log)
-                    return {"result": result, "before": before}
+                    return {"result": result, "before": before, "action": action}
                 finally:
                     pass
         return machine_obj.execute(Task())
 
     def apply_done(self, payload):
-        self.revert_offsets_snapshot = payload.get("before")
+        # A full XYZ measurement already captured the original offsets before
+        # its temporary Z application. Never replace that rollback snapshot
+        # with the temporary offsets observed immediately before Apply.
+        if self.original_offsets_snapshot is None:
+            self.original_offsets_snapshot = deep_copy(payload.get("before"))
+            self.revert_offsets_snapshot = deep_copy(self.original_offsets_snapshot)
+        if payload.get("action") == "xyz":
+            self.pending_calibration_state = None
         self.last_result = payload.get("result")
         self.result_area.setText(self.format_result(self.last_result))
         self.refresh_current_values()
@@ -1430,7 +1492,8 @@ class NeedleCalibrationGui2(object):
             def call(task_self):
                 try:
                     nozzle = needle_calibration.find_nozzle(cfg, None, machine_obj)
-                    return needle_calibration.revert_offsets(nozzle, backup, gui_self.append_log)
+                    return needle_calibration.revert_offsets(nozzle, backup,
+                        gui_self.append_log, cfg)
                 finally:
                     pass
         return machine_obj.execute(Task())
@@ -1438,8 +1501,53 @@ class NeedleCalibrationGui2(object):
     def revert_done(self, result):
         self.last_result = result
         self.result_area.setText(self.format_result(result))
+        if result is not None and result.get("ok", False):
+            self.pending_calibration_state = None
+            self.original_offsets_snapshot = None
+            self.revert_offsets_snapshot = None
+            self.last_z_proposal = None
+            self.last_xy_proposal = None
+            self.last_xyz_proposal = None
+            self.append_log("Revert complete; pending temporary calibration cleared")
         self.refresh_current_values()
-        self.set_state(READY)
+        self.set_state(READY if result is not None and result.get("ok", False) else ERROR)
+
+    def request_close(self):
+        if self.worker_running:
+            JOptionPane.showMessageDialog(self.frame,
+                "A machine operation is still running. Wait for it to finish before closing.",
+                "Operation In Progress", JOptionPane.INFORMATION_MESSAGE)
+            return
+        if not self.has_pending_temporary_z():
+            self.frame.dispose()
+            return
+        choice = JOptionPane.showConfirmDialog(self.frame,
+            "A temporary Z correction is active and has not been committed. "
+            "Revert the original offsets before closing?",
+            "Pending Temporary Calibration", JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE)
+        if choice != JOptionPane.YES_OPTION:
+            return
+        try:
+            cfg = self.collect_config(False)
+            backup = deep_copy(self.original_offsets_snapshot or
+                self.revert_offsets_snapshot)
+            if backup is None:
+                raise Exception("Original calibration offsets are unavailable")
+        except Exception as e:
+            self.show_error("Close setup failed", e)
+            return
+        self.run_worker("Revert Before Close",
+            lambda: self.do_revert(cfg, backup), self.close_revert_done)
+
+    def close_revert_done(self, result):
+        if result is not None and result.get("ok", False):
+            self.revert_done(result)
+            self.frame.dispose()
+        else:
+            self.set_state(ERROR)
+            self.show_error("Close blocked; temporary offsets remain active",
+                (result or {}).get("message", "Offset restoration failed"))
 
     def save_config_action(self):
         try:
@@ -1455,6 +1563,12 @@ class NeedleCalibrationGui2(object):
             self.show_error("Save JSON failed", e)
 
     def save_machine_action(self):
+        if self.has_pending_temporary_z():
+            self.set_state(ERROR)
+            self.show_error("Save OpenPnP Config blocked",
+                "Apply XYZ or Revert Offsets before saving; the temporary Z "
+                "correction must not be written to machine.xml.")
+            return
         try:
             Configuration.get().save()
             self.refresh_current_values()
@@ -1471,16 +1585,19 @@ class NeedleCalibrationGui2(object):
         lines.append("ok: %s" % result.get("ok"))
         lines.append("stage: %s" % result.get("stage", ""))
         lines.append("message: %s" % result.get("message", ""))
+        state = result.get("calibration_state") or {}
+        if state.get("temporary_z_active", False):
+            lines.append("TEMPORARY Z ACTIVE: not committed; Apply XYZ or Revert Offsets")
         proposal = result.get("proposal")
         if proposal:
             delta = proposal.get("offset_delta", {})
             proposed = proposal.get("proposed_offsets", {})
-            lines.append("offset delta: X %.6f  Y %.6f  Z %.6f" %
+            lines.append("offset delta: X %.6f  Y %.6f  Z %.6f  R %.6f" %
                 (float(delta.get("x", 0.0)), float(delta.get("y", 0.0)),
-                 float(delta.get("z", 0.0))))
-            lines.append("proposed offsets: X %.6f  Y %.6f  Z %.6f" %
+                 float(delta.get("z", 0.0)), float(delta.get("rotation", 0.0))))
+            lines.append("proposed offsets: X %.6f  Y %.6f  Z %.6f  R %.6f" %
                 (float(proposed.get("x", 0.0)), float(proposed.get("y", 0.0)),
-                 float(proposed.get("z", 0.0))))
+                 float(proposed.get("z", 0.0)), float(proposed.get("rotation", 0.0))))
         details = result.get("details", {})
         if details.get("center_delta", None) is not None:
             cd = details.get("center_delta")
@@ -1499,6 +1616,9 @@ class NeedleCalibrationGui2(object):
             lines.append("estimated probe diameter/radius: %.6f / %.6f" %
                 (float(details.get("estimated_effective_probe_diameter_mm", 0.0)),
                  float(details.get("estimated_effective_probe_radius_mm", 0.0))))
+        for warning in details.get("fit_quality_warnings", []):
+            lines.append("warning: %s (diagnostic only; XY uses opposite-pair midpoints)" %
+                warning)
         lines.append("")
         lines.append(json.dumps(json_safe(result), sort_keys=True, indent=2))
         return "\n".join(lines)

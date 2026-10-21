@@ -2465,6 +2465,89 @@ def fail_payload(stage, message, nozzle=None, cfg=None, logger=None, old_offsets
         "proposal": None, "details": {}}
 
 
+OFFSET_VERIFY_TOLERANCE_MM = 0.000001
+
+
+def offsets_match(actual, expected, tolerance=OFFSET_VERIFY_TOLERANCE_MM):
+    if actual is None or expected is None:
+        return False
+    for axis in ["x", "y", "z", "rotation"]:
+        try:
+            if abs(float(actual.get(axis, 0.0)) -
+                    float(expected.get(axis, 0.0))) > float(tolerance):
+                return False
+        except:
+            return False
+    return True
+
+
+def synchronize_coordinate_system(nozzle, machine_obj=None, logger=None):
+    """Wait until OpenPnP and the driver agree after a head-offset change."""
+    wait_still(nozzle)
+    machine_obj = get_machine(machine_obj)
+    try:
+        planner = machine_obj.getMotionPlanner()
+    except:
+        planner = None
+    if planner is not None:
+        try:
+            planner.waitForCompletion(None, CompletionType.WaitForStillstand)
+        except TypeError:
+            planner.waitForCompletion(CompletionType.WaitForStillstand)
+    # Reading the transformed location after the planner barrier forces the
+    # active nozzle/head transform to be observed before the next move.
+    location = get_movable_location(nozzle)
+    log_msg(logger, "Coordinate system synchronized at %s" % loc_to_log(location))
+    return location
+
+
+def set_offsets_and_verify(nozzle, offsets, logger=None):
+    set_offsets_from_dict(nozzle, offsets)
+    actual = loc_to_dict(nozzle.getHeadOffsets().convertToUnits(
+        LengthUnit.Millimeters))
+    if not offsets_match(actual, offsets):
+        raise NeedleCalibrationError(
+            "Head offsets did not verify after set: expected=%s actual=%s" %
+            (offsets, actual))
+    return actual
+
+
+def restore_offsets_after_safe_retraction(cfg, nozzle, offsets, machine_obj=None,
+        logger=None):
+    """Restore offsets only after the nozzle is safely clear of the post."""
+    try:
+        lift_nozzle_to_safe_z(nozzle, cfg, logger)
+        synchronize_coordinate_system(nozzle, machine_obj, logger)
+    except Throwable as error:
+        raise NeedleCalibrationError(
+            "SAFETY-CRITICAL: safe nozzle retraction failed; original offsets "
+            "were not restored: %s" % error)
+    except Exception as error:
+        raise NeedleCalibrationError(
+            "SAFETY-CRITICAL: safe nozzle retraction failed; original offsets "
+            "were not restored: %s" % error)
+    try:
+        restored = set_offsets_and_verify(nozzle, offsets, logger)
+        synchronize_coordinate_system(nozzle, machine_obj, logger)
+        verified = loc_to_dict(nozzle.getHeadOffsets().convertToUnits(
+            LengthUnit.Millimeters))
+        if not offsets_match(verified, offsets):
+            raise NeedleCalibrationError(
+                "restored offsets did not verify: expected=%s actual=%s" %
+                (offsets, verified))
+        log_msg(logger, "Original head offsets restored and verified: %s" %
+            verified)
+        return {"ok": True, "restored_offsets": restored}
+    except Throwable as error:
+        raise NeedleCalibrationError(
+            "SAFETY-CRITICAL: original head-offset restoration failed: %s" %
+            error)
+    except Exception as error:
+        raise NeedleCalibrationError(
+            "SAFETY-CRITICAL: original head-offset restoration failed: %s" %
+            error)
+
+
 def make_z_proposal(cfg, old, z_error):
     old = old.convertToUnits(LengthUnit.Millimeters)
     dz = float(cfg.get("z_offset_sign", 1.0)) * float(z_error)
@@ -2740,19 +2823,33 @@ def run_post_xy_measure(cfg, nozzle=None, machine_obj=None, logger=None):
         max_fit_rms = float(post.get("max_fit_rms_mm", 0.15))
         max_fit_error = float(post.get("max_fit_error_mm", 0.30))
         max_center = float(post.get("max_center_error_mm", 2.0))
+        fit_quality_warnings = []
         if fit_rms > max_fit_rms:
-            return {"ok": False, "stage": stage,
-                "message": "fit RMS %.6f exceeds %.6f" % (fit_rms, max_fit_rms),
-                "old_offsets": old_offsets,
-                "current_offsets": loc_to_dict(nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters)),
-                "proposal": None, "details": details}
+            fit_quality_warnings.append(
+                "fit RMS %.6f exceeds %.6f" % (fit_rms, max_fit_rms))
         if fit_max > max_fit_error:
-            return {"ok": False, "stage": stage,
-                "message": "fit max error %.6f exceeds %.6f" %
-                    (fit_max, max_fit_error),
-                "old_offsets": old_offsets,
-                "current_offsets": loc_to_dict(nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters)),
-                "proposal": None, "details": details}
+            fit_quality_warnings.append(
+                "fit max error %.6f exceeds %.6f" % (fit_max, max_fit_error))
+        details["fit_quality_warnings"] = fit_quality_warnings
+
+        # Circle residuals only describe how circular the eight needle-contact
+        # points are. The normal XY result comes from opposite-pair midpoints,
+        # which intentionally cancels contact radius and remains valid when a
+        # different needle diameter, bevel, or small directional compliance
+        # makes the contact locus non-circular. Do not reject that independent
+        # estimator using circle-fit residuals. If no opposite pair exists and
+        # we actually fall back to the fitted circle center, however, the fit
+        # limits are still required safety checks.
+        if fit_quality_warnings:
+            if xy_center_source == "circle_fit_center_fallback":
+                return {"ok": False, "stage": stage,
+                    "message": fit_quality_warnings[0],
+                    "old_offsets": old_offsets,
+                    "current_offsets": loc_to_dict(nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters)),
+                    "proposal": None, "details": details}
+            for warning in fit_quality_warnings:
+                log_msg(logger, "POST XY WARNING: %s; diagnostic only because XY uses opposite-pair midpoints" %
+                    warning)
         if abs(dx) > max_center or abs(dy) > max_center:
             return {"ok": False, "stage": stage,
                 "message": "center delta X/Y %.6f/%.6f exceeds %.6f" %
@@ -2775,6 +2872,8 @@ def run_full_measure(cfg, nozzle=None, machine_obj=None, logger=None):
     old_offsets = None
     z = None
     post = None
+    temporary_offsets = None
+    temporary_change_attempted = False
     try:
         machine_obj = get_machine(machine_obj)
         nozzle = find_nozzle(cfg, nozzle, machine_obj)
@@ -2782,34 +2881,141 @@ def run_full_measure(cfg, nozzle=None, machine_obj=None, logger=None):
         old_offsets = loc_to_dict(old)
         z = run_z_measure(cfg, nozzle, machine_obj, logger)
         if not z.get("ok", False):
-            raise NeedleCalibrationError("Z measure failed: %s" % z.get("message"))
+            return {"ok": False, "stage": "full",
+                "message": "Z measure failed: %s" % z.get("message"),
+                "old_offsets": old_offsets,
+                "current_offsets": loc_to_dict(nozzle.getHeadOffsets().convertToUnits(
+                    LengthUnit.Millimeters)),
+                "z": z, "post_xy": None, "proposal": None,
+                "offsets_restored": True,
+                "calibration_state": {"status": "original",
+                    "original_offsets": deep_copy(old_offsets),
+                    "temporary_offsets": None,
+                    "proposed_offsets": None,
+                    "temporary_z_active": False}}
+
+        # The Z proposal is calculated against the snapshot taken before any
+        # calibration movement. Apply only Z temporarily, preserving X/Y/R.
+        z_proposed = z.get("proposal", {}).get("proposed_offsets", {})
+        temporary_offsets = deep_copy(old_offsets)
+        temporary_offsets["z"] = float(z_proposed["z"])
+        check_apply_delta(cfg, old_offsets, temporary_offsets, ["z"])
+        log_msg(logger, "Full XYZ original Z=%s temporary Z=%s" %
+            (fmt_float(old_offsets["z"]), fmt_float(temporary_offsets["z"])))
+        temporary_change_attempted = True
+        set_offsets_and_verify(nozzle, temporary_offsets, logger)
+        # Explicitly verify that the temporary operation did not touch X/Y/R.
+        active_temporary = loc_to_dict(nozzle.getHeadOffsets().convertToUnits(
+            LengthUnit.Millimeters))
+        if (abs(active_temporary["x"] - old_offsets["x"]) > OFFSET_VERIFY_TOLERANCE_MM or
+                abs(active_temporary["y"] - old_offsets["y"]) > OFFSET_VERIFY_TOLERANCE_MM or
+                abs(active_temporary["rotation"] - old_offsets["rotation"]) >
+                OFFSET_VERIFY_TOLERANCE_MM):
+            raise NeedleCalibrationError(
+                "Temporary Z application changed X, Y, or rotation")
+        synchronize_coordinate_system(nozzle, machine_obj, logger)
+        log_msg(logger, "Temporary corrected Z is active for contact-post XY")
+
         post = run_post_xy_measure(cfg, nozzle, machine_obj, logger)
         if not post.get("ok", False):
             raise NeedleCalibrationError("Post XY measure failed: %s" % post.get("message"))
         zd = z["proposal"]["offset_delta"]
         xd = post["proposal"]["offset_delta"]
-        proposed = mm_loc(old.getX() + float(xd.get("x", 0.0)),
-            old.getY() + float(xd.get("y", 0.0)),
-            old.getZ() + float(zd.get("z", 0.0)),
-            old.getRotation())
+        proposed = mm_loc(old_offsets["x"] + float(xd.get("x", 0.0)),
+            old_offsets["y"] + float(xd.get("y", 0.0)),
+            old_offsets["z"] + float(zd.get("z", 0.0)),
+            old_offsets["rotation"])
+        proposed_offsets = loc_to_dict(proposed)
+        check_apply_delta(cfg, old_offsets, proposed_offsets, ["x", "y", "z"])
+        calibration_state = {
+            "status": "temporary",
+            "original_offsets": deep_copy(old_offsets),
+            "temporary_offsets": deep_copy(temporary_offsets),
+            "proposed_offsets": deep_copy(proposed_offsets),
+            "temporary_z_active": True,
+            "accepted": False
+        }
         proposal = {"type": "xyz",
             "offset_delta": {"x": float(xd.get("x", 0.0)),
                 "y": float(xd.get("y", 0.0)), "z": float(zd.get("z", 0.0))},
-            "proposed_offsets": loc_to_dict(proposed)}
+            "proposed_offsets": proposed_offsets,
+            "original_offsets": deep_copy(old_offsets),
+            "temporary_offsets": deep_copy(temporary_offsets),
+            "calibration_state": deep_copy(calibration_state)}
         current = loc_to_dict(nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters))
         return {"ok": True, "stage": "full", "message": "ok",
             "old_offsets": old_offsets, "current_offsets": current,
-            "z": z, "post_xy": post, "proposal": proposal}
+            "z": z, "post_xy": post, "proposal": proposal,
+            "original_offsets": deep_copy(old_offsets),
+            "temporary_offsets": deep_copy(temporary_offsets),
+            "offsets_restored": False,
+            "calibration_state": calibration_state}
     except Throwable as e:
-        return {"ok": False, "stage": "full", "message": str(e),
-            "old_offsets": old_offsets,
-            "current_offsets": loc_to_dict(nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters)) if nozzle is not None else old_offsets,
-            "z": z, "post_xy": post, "proposal": None}
+        error = e
+        cleanup = None
+        restore_error = None
+        if nozzle is not None and temporary_change_attempted:
+            try:
+                cleanup = restore_offsets_after_safe_retraction(cfg, nozzle,
+                    old_offsets, machine_obj, logger)
+            except Throwable as cleanup_exception:
+                restore_error = str(cleanup_exception)
+            except Exception as cleanup_exception:
+                restore_error = str(cleanup_exception)
+        message = str(error)
+        if restore_error is not None:
+            message = "%s; %s" % (message, restore_error)
+        current = None
+        try:
+            current = loc_to_dict(nozzle.getHeadOffsets().convertToUnits(
+                LengthUnit.Millimeters)) if nozzle is not None else old_offsets
+        except:
+            current = old_offsets
+        restored = temporary_change_attempted and restore_error is None
+        return {"ok": False, "stage": "full", "message": message,
+            "old_offsets": old_offsets, "current_offsets": current,
+            "z": z, "post_xy": post, "proposal": None,
+            "offsets_restored": restored, "cleanup": cleanup,
+            "safety_critical": restore_error is not None,
+            "calibration_state": {"status": "reverted" if restored else
+                ("restore_failed" if temporary_change_attempted else "original"),
+                "original_offsets": deep_copy(old_offsets),
+                "temporary_offsets": deep_copy(temporary_offsets),
+                "proposed_offsets": None,
+                "temporary_z_active": not restored}}
     except Exception as e:
-        return {"ok": False, "stage": "full", "message": str(e),
-            "old_offsets": old_offsets,
-            "current_offsets": loc_to_dict(nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters)) if nozzle is not None else old_offsets,
-            "z": z, "post_xy": post, "proposal": None}
+        error = e
+        cleanup = None
+        restore_error = None
+        if nozzle is not None and temporary_change_attempted:
+            try:
+                cleanup = restore_offsets_after_safe_retraction(cfg, nozzle,
+                    old_offsets, machine_obj, logger)
+            except Throwable as cleanup_exception:
+                restore_error = str(cleanup_exception)
+            except Exception as cleanup_exception:
+                restore_error = str(cleanup_exception)
+        message = str(error)
+        if restore_error is not None:
+            message = "%s; %s" % (message, restore_error)
+        current = None
+        try:
+            current = loc_to_dict(nozzle.getHeadOffsets().convertToUnits(
+                LengthUnit.Millimeters)) if nozzle is not None else old_offsets
+        except:
+            current = old_offsets
+        restored = temporary_change_attempted and restore_error is None
+        return {"ok": False, "stage": "full", "message": message,
+            "old_offsets": old_offsets, "current_offsets": current,
+            "z": z, "post_xy": post, "proposal": None,
+            "offsets_restored": restored, "cleanup": cleanup,
+            "safety_critical": restore_error is not None,
+            "calibration_state": {"status": "reverted" if restored else
+                ("restore_failed" if temporary_change_attempted else "original"),
+                "original_offsets": deep_copy(old_offsets),
+                "temporary_offsets": deep_copy(temporary_offsets),
+                "proposed_offsets": None,
+                "temporary_z_active": not restored}}
 
 
 def check_apply_delta(cfg, current, proposed, axes):
@@ -2834,9 +3040,10 @@ def apply_z(cfg, nozzle, proposal, logger=None):
     target["z"] = float(proposed["z"])
     check_apply_delta(cfg, current, target, ["z"])
     log_msg(logger, "Apply Z offset old=%s new=%s" % (current, target))
-    set_offsets_from_dict(nozzle, target)
+    new_offsets = set_offsets_and_verify(nozzle, target, logger)
+    synchronize_coordinate_system(nozzle, None, logger)
     return {"ok": True, "stage": "apply_z", "old_offsets": current,
-        "new_offsets": loc_to_dict(nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters))}
+        "new_offsets": new_offsets}
 
 
 def apply_xy(cfg, nozzle, proposal, logger=None):
@@ -2847,9 +3054,10 @@ def apply_xy(cfg, nozzle, proposal, logger=None):
     target["y"] = float(proposed["y"])
     check_apply_delta(cfg, current, target, ["x", "y"])
     log_msg(logger, "Apply XY offset old=%s new=%s" % (current, target))
-    set_offsets_from_dict(nozzle, target)
+    new_offsets = set_offsets_and_verify(nozzle, target, logger)
+    synchronize_coordinate_system(nozzle, None, logger)
     return {"ok": True, "stage": "apply_xy", "old_offsets": current,
-        "new_offsets": loc_to_dict(nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters))}
+        "new_offsets": new_offsets}
 
 
 def apply_xyz(cfg, nozzle, proposal, logger=None):
@@ -2859,20 +3067,40 @@ def apply_xyz(cfg, nozzle, proposal, logger=None):
     target["x"] = float(proposed["x"])
     target["y"] = float(proposed["y"])
     target["z"] = float(proposed["z"])
-    check_apply_delta(cfg, current, target, ["x", "y", "z"])
+    if "rotation" in proposed:
+        target["rotation"] = float(proposed["rotation"])
+    state = proposal.get("calibration_state", {})
+    limit_base = state.get("original_offsets") if isinstance(state, dict) else None
+    check_apply_delta(cfg, limit_base or current, target, ["x", "y", "z"])
     log_msg(logger, "Apply XYZ offset old=%s new=%s" % (current, target))
-    set_offsets_from_dict(nozzle, target)
+    new_offsets = set_offsets_and_verify(nozzle, target, logger)
+    synchronize_coordinate_system(nozzle, None, logger)
+    accepted_state = None
+    if isinstance(state, dict) and state:
+        accepted_state = {"status": "accepted",
+            "original_offsets": deep_copy(state.get("original_offsets")),
+            "temporary_offsets": deep_copy(state.get("temporary_offsets")),
+            "proposed_offsets": deep_copy(target),
+            "temporary_z_active": False, "accepted": True}
     return {"ok": True, "stage": "apply_xyz", "old_offsets": current,
-        "new_offsets": loc_to_dict(nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters))}
+        "new_offsets": new_offsets, "calibration_state": accepted_state}
 
 
-def revert_offsets(nozzle, offsets, logger=None):
+def revert_offsets(nozzle, offsets, logger=None, cfg=None):
     current = loc_to_dict(nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters))
-    set_offsets_from_dict(nozzle, offsets)
+    if cfg is not None:
+        restore_offsets_after_safe_retraction(cfg, nozzle, offsets, None, logger)
+    else:
+        set_offsets_and_verify(nozzle, offsets, logger)
+        synchronize_coordinate_system(nozzle, None, logger)
     new_offsets = loc_to_dict(nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters))
     log_msg(logger, "Revert offsets old=%s restored=%s" % (current, new_offsets))
     return {"ok": True, "stage": "revert_offsets",
-        "old_offsets": current, "new_offsets": new_offsets}
+        "old_offsets": current, "new_offsets": new_offsets,
+        "calibration_state": {"status": "reverted",
+            "original_offsets": deep_copy(offsets),
+            "temporary_offsets": None, "proposed_offsets": None,
+            "temporary_z_active": False}}
 
 
 if __name__ == "__main__":
