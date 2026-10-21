@@ -20,7 +20,11 @@ if JOB_LIB_DIR not in sys.path:
     sys.path.insert(0, JOB_LIB_DIR)
 from job_runtime import GuiJobStateApi, JobRuntimeMonitor, JobStopRequested
 from pre_dispense_flush import run_pre_dispense_flush
-from vision_consistency import resolve_world_measurement, world_xy_distance_mm
+from vision_consistency import (VISION_CONFIRMATION_CAPTURES,
+                                VISION_CONFIRMATION_TRIGGER_MM,
+                                confirm_world_measurements,
+                                resolve_world_measurement,
+                                world_xy_distance_mm)
 from board_pose import (ANCHOR_RESIDUAL_TOLERANCE_MM,
                         apply_measured_board_pose,
                         make_fiducial_locked_transform,
@@ -143,10 +147,6 @@ def runtime_checkpoint(label, allow_pause=True):
 
 SCRIPT_T0_NS = System.nanoTime()
 LAST_T_NS = SCRIPT_T0_NS
-
-
-def now_ms():
-    return (System.nanoTime() - SCRIPT_T0_NS) / 1000000.0
 
 
 def elapsed_ms_since(t0_ns):
@@ -546,6 +546,8 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
         initial_view_loc = cam_target
         reliable_world_loc = None
         pending_suspect_loc = None
+        previous_world_loc = None
+        measurement_history = []
 
         for recenter_pass in range(1, RECENTER_MAX_PASSES + 1):
             wait_still(
@@ -619,15 +621,54 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
                 log("[%s] Rejected vision pass: %s" % (label, last_reject))
                 break
 
+            successive_disagreement = 0.0
+            if previous_world_loc is not None:
+                successive_disagreement = world_xy_distance_mm(
+                    previous_world_loc, detected_loc)
+            measurement_history.append({
+                "location": detected_loc, "angle": rr.angle})
+            previous_world_loc = detected_loc
+            selected_angle = rr.angle
             reliable_world_loc, pending_suspect_loc, world_disagreement, world_state = \
                 resolve_world_measurement(
                     reliable_world_loc, pending_suspect_loc, detected_loc,
                     MAX_VISION_WORLD_DISAGREEMENT_MM)
             cam_mm = cam_loc.convertToUnits(LengthUnit.Millimeters)
-            log("[%s] pass=%d rects=%d cam=(%.4f,%.4f) detected=(%.4f,%.4f) image=(%.6f,%.6f) world=%.6f state=%s angle=%.4f" %
+            log("[%s] pass=%d rects=%d cam=(%.4f,%.4f) detected=(%.4f,%.4f) image=(%.6f,%.6f) world=%.6f successive=%.6f state=%s angle=%.4f" %
                 (label, recenter_pass, len(rects), cam_mm.getX(), cam_mm.getY(),
                  detected_mm.getX(), detected_mm.getY(), center_dx, center_dy,
-                 world_disagreement, world_state, rr.angle))
+                 world_disagreement, successive_disagreement, world_state,
+                 selected_angle))
+
+            if (len(measurement_history) > 1 and
+                    successive_disagreement > VISION_CONFIRMATION_TRIGGER_MM):
+                confirmed = confirm_world_measurements(
+                    measurement_history, pipeline, cam,
+                    VISION_CONFIRMATION_CAPTURES, label,
+                    PRE_CAPTURE_SETTLE_MS, wait_still, cooperative_sleep,
+                    runtime_checkpoint, get_camera_image_size,
+                    get_camera_units_per_pixel, get_pipeline_rotated_rects,
+                    choose_closest_rect_to_image_center,
+                    rect_center_machine_offset, initial_view_loc,
+                    detection_inside_initial_view, p_loc_mm, MAX_NUDGE_MM,
+                    cam_loc, upp_loc, width, height)
+                if confirmed is None:
+                    last_reject = (
+                        "vision confirmation found no unique 3-capture consensus")
+                    log("[%s] Rejected vision pass: %s" % (label, last_reject))
+                    break
+
+                (detected_loc, detected_mm, center_dx, center_dy, board_dx_mm,
+                 board_dy_mm, selected_angle, confirmed_count, confirmed_spread,
+                 confirmed_angle_spread) = confirmed
+                previous_world_loc = reliable_world_loc = detected_loc
+                pending_suspect_loc = None
+                world_state = "consensus"
+                world_disagreement = 0.0
+                log("[%s] Confirmation accepted count=%d spread=%.6f mm angleSpread=%.4f deg." %
+                    (label, confirmed_count, confirmed_spread,
+                     confirmed_angle_spread))
+
             if world_state == "suspect":
                 last_reject = (
                     "world disagreement %.6f mm exceeds %.6f mm" %
@@ -645,9 +686,9 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
                     old_global_tx).rotationAngleDeg
                 new_rot = old_transform_angle
                 if APPLY_ROTATION:
-                    new_rot = DESIGN_BOARD_ROT_DEG + (EXPECTED_ANGLE_DEG - rr.angle)
+                    new_rot = DESIGN_BOARD_ROT_DEG + (EXPECTED_ANGLE_DEG - selected_angle)
                     log("[%s] Target global transform angle=%.4f from measured=%.4f" %
-                        (label, new_rot, rr.angle))
+                        (label, new_rot, selected_angle))
 
                 new_tx, old_transform_angle = make_fiducial_locked_transform(
                     bl, fid_loc, detected_loc, new_rot)
@@ -661,7 +702,7 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
                     "dx": board_dx_mm,
                     "dy": board_dy_mm,
                     "rotation": new_rot,
-                    "angle": rr.angle,
+                    "angle": selected_angle,
                     "recenterPass": recenter_pass,
                     "measurementAttempt": measurement_attempt,
                 }
@@ -1114,14 +1155,6 @@ def find_first_real_dispense_path_index(planned_path):
         if is_real_dispense_item(planned_path[i]):
             return i
     return -1
-
-
-def find_previous_motion_item(planned_path, current_index):
-    for i in range(current_index - 1, -1, -1):
-        item = planned_path[i]
-        if item is not None and item.get("type") in ["pad", "corner"]:
-            return item
-    return None
 
 
 def find_previous_real_dispense_item(planned_path, current_index):
@@ -1773,8 +1806,6 @@ def run_dispense_path_pass(mac, dispense_head, glue, planned_path, units,
                            first_real_dispense_path_index, timer_label,
                            motion_label):
     dispensed = 0
-    pass_t0 = log_t("%s START path_items=%d" %
-                    (timer_label, len(planned_path)))
 
     for path_index in range(len(planned_path)):
         item = planned_path[path_index]
@@ -1814,9 +1845,6 @@ def run_dispense_path_pass(mac, dispense_head, glue, planned_path, units,
         dot_number = int(item["dot_index"]) + 1
         total_dots = int(item["total_dots"])
 
-        pad_t0 = log_t("%s pad %d dot %d/%d: START" %
-                       (motion_label, pad_index, dot_number, total_dots))
-
         move_direct_no_dynamic_comp(
             dispense_head,
             dispense_head_location(units, item["x"], item["y"], lift_z),
@@ -1834,15 +1862,10 @@ def run_dispense_path_pass(mac, dispense_head, glue, planned_path, units,
             (motion_label, pad_index, dot_number, total_dots)
         )
 
-        log_t("%s pad %d dot %d/%d: BEFORE pre-glue wait_coord" %
-              (motion_label, pad_index, dot_number, total_dots))
         wait_coord(
             dispense_head,
             "%s pad %d dot %d/%d pre-glue" %
             (motion_label, pad_index, dot_number, total_dots))
-        log_t("%s pad %d dot %d/%d: AFTER pre-glue wait_coord / AT DISPENSE Z" %
-              (motion_label, pad_index, dot_number, total_dots))
-
         log("%s head reached pad %d '%s' dot %d/%d at dispense Z." %
             (motion_label, pad_index, pad_name, dot_number, total_dots))
 
@@ -1850,11 +1873,7 @@ def run_dispense_path_pass(mac, dispense_head, glue, planned_path, units,
                  "%s pad %d pre-dispense dwell" %
                  (motion_label, pad_index), False)
 
-        log_t("%s pad %d dot %d/%d: BEFORE pulse_glue_controller" %
-              (motion_label, pad_index, dot_number, total_dots))
         pulse_glue_controller(glue, mac, pad_index)
-        log_t("%s pad %d dot %d/%d: AFTER pulse_glue_controller" %
-              (motion_label, pad_index, dot_number, total_dots))
         dispensed += 1
 
         is_last_real_dot = path_index == last_real_dispense_path_index
@@ -1871,10 +1890,6 @@ def run_dispense_path_pass(mac, dispense_head, glue, planned_path, units,
                 log("%s final closing drag skipped for pad %d dot %d/%d because no valid first/last dispense path was available." %
                     (motion_label, pad_index, dot_number, total_dots))
             else:
-                log_t("%s pad %d dot %d/%d: BEFORE final closing drag at dispense Z points=%d" %
-                      (motion_label, pad_index, dot_number, total_dots,
-                       len(closing_points)))
-
                 for close_index in range(len(closing_points)):
                     point = closing_points[close_index]
 
@@ -1913,11 +1928,6 @@ def run_dispense_path_pass(mac, dispense_head, glue, planned_path, units,
                         )
                     )
 
-                log_t("%s pad %d dot %d/%d: AFTER final closing drag at dispense Z" %
-                      (motion_label, pad_index, dot_number, total_dots))
-
-        log_t("%s pad %d dot %d/%d: BEFORE retract queue" %
-              (motion_label, pad_index, dot_number, total_dots))
         move_z_only_no_dynamic_comp(
             dispense_head,
             units,
@@ -1933,19 +1943,8 @@ def run_dispense_path_pass(mac, dispense_head, glue, planned_path, units,
         runtime_checkpoint(
             "%s pad %d dot %d/%d safely retracted" %
             (motion_label, pad_index, dot_number, total_dots))
-        log_t("%s pad %d dot %d/%d: AFTER completed retract" %
-              (motion_label, pad_index, dot_number, total_dots))
 
-        log_t("%s pad %d dot %d/%d: END total elapsed=%.3f ms" %
-              (motion_label, pad_index, dot_number, total_dots,
-               elapsed_ms_since(pad_t0)))
-
-    log_t("%s BEFORE final retract/queue drain" % timer_label)
     wait_coord(dispense_head, "%s final retract/queue drain" % motion_label)
-    log_t("%s AFTER final retract/queue drain" % timer_label)
-
-    log_t("%s END total elapsed=%.3f ms dispensed=%d" %
-          (timer_label, elapsed_ms_since(pass_t0), dispensed))
 
     return dispensed
 
@@ -1955,9 +1954,6 @@ def run_continuous_dry_path_pass(mac, dispense_head, glue, planned_path,
                                  base_z, lift_z,
                                  last_real_dispense_path_index,
                                  first_real_dispense_path_index):
-    pass_t0 = log_t("DRY SECOND PASS CONTINUOUS START path_items=%d" %
-                    len(planned_path))
-
     if first_real_dispense_path_index < 0 or last_real_dispense_path_index < 0:
         log("DRY SECOND PASS CONTINUOUS skipped because no real pad path items were available.")
         return 0
@@ -2008,10 +2004,7 @@ def run_continuous_dry_path_pass(mac, dispense_head, glue, planned_path,
             (corner_index + 1, len(square_corners), corner["name"]))
         queued_points += 1
 
-    log_t("DRY SECOND PASS CONTINUOUS BEFORE queued square drain points=%d" %
-          queued_points)
     wait_coord(dispense_head, "dry second pass continuous queued path drain")
-    log_t("DRY SECOND PASS CONTINUOUS AFTER queued square drain")
 
     log("DRY SECOND PASS CONTINUOUS retracting once to lift Z=%.4f" % lift_z)
     move_z_only_no_dynamic_comp(
@@ -2029,8 +2022,6 @@ def run_continuous_dry_path_pass(mac, dispense_head, glue, planned_path,
         glue, mac, ACTUATOR_SETTLE_MS,
         "dry second pass continuous GlueDispense forced off after pass wait")
 
-    log_t("DRY SECOND PASS CONTINUOUS END elapsed=%.3f ms queued_points=%d" %
-          (elapsed_ms_since(pass_t0), queued_points))
     return queued_points
 
 
