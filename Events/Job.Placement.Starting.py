@@ -18,6 +18,7 @@ JOB_LIB_DIR = SCRIPTS_ROOT + "/Events/_lib"
 if JOB_LIB_DIR not in sys.path:
     sys.path.insert(0, JOB_LIB_DIR)
 from job_runtime import GuiJobStateApi, JobRuntimeMonitor, JobStopRequested
+from vision_consistency import resolve_world_measurement, world_xy_distance_mm
 from board_pose import (ANCHOR_RESIDUAL_TOLERANCE_MM,
                         apply_board_transform,
                         fiducial_xy_residual_mm,
@@ -40,6 +41,7 @@ RETRY_DELAY_MS = 250
 VISION_MEASUREMENT_ATTEMPTS = 2
 RECENTER_MAX_PASSES = 3
 RECENTER_TOLERANCE_MM = 0.04
+MAX_VISION_WORLD_DISAGREEMENT_MM = 0.10
 FORCE_VISION_RECENTER = True
 
 FLIP_IMAGE_X = False
@@ -181,8 +183,11 @@ def extract_rotated_rects_from_model(model):
 
 
 def get_pipeline_rotated_rects(pipeline):
-    rects = []
+    seen_keys = set()
     for key in [RESULT_STAGE_KEY, "results", "preResults"]:
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
         try:
             res = pipeline.getResult(key)
         except:
@@ -196,11 +201,29 @@ def get_pipeline_rotated_rects(pipeline):
                 model = res.model
             except:
                 model = None
-        rects.extend(extract_rotated_rects_from_model(model))
-    return rects
+        rects = extract_rotated_rects_from_model(model)
+        if rects:
+            return rects
+    return []
 
 
-def choose_closest_rect_to_image_center(rects, width, height):
+def choose_closest_rect_to_image_center(rects, width, height,
+                                        cam_loc=None, upp_loc=None,
+                                        reference_loc=None):
+    if reference_loc is not None:
+        consistent = []
+        for candidate in rects:
+            dx, dy, px, py = rect_center_machine_offset(
+                cam_loc, upp_loc, candidate, width, height)
+            candidate_loc = Location(
+                cam_loc.getUnits(), cam_loc.getX() + dx,
+                cam_loc.getY() + dy, cam_loc.getZ(), cam_loc.getRotation())
+            if (world_xy_distance_mm(candidate_loc, reference_loc) <=
+                    MAX_VISION_WORLD_DISAGREEMENT_MM):
+                consistent.append(candidate)
+        if consistent:
+            rects = consistent
+
     best = None
     best_dist2 = None
     cx = width / 2.0
@@ -429,6 +452,8 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
             cam, cam_target,
             "%s camera nominal attempt %d" % (label, measurement_attempt))
         initial_view_loc = cam_target
+        reliable_world_loc = None
+        pending_suspect_loc = None
 
         for recenter_pass in range(1, RECENTER_MAX_PASSES + 1):
             wait_still(
@@ -464,14 +489,15 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
                 break
 
             width, height = get_camera_image_size(cam)
-            rr, dist2 = choose_closest_rect_to_image_center(rects, width, height)
+            cam_loc = cam.getLocation()
+            upp_loc = get_camera_units_per_pixel(cam)
+            rr, dist2 = choose_closest_rect_to_image_center(
+                rects, width, height, cam_loc, upp_loc, reliable_world_loc)
             if rr is None:
                 last_reject = "no usable RotatedRect results"
                 log("[%s] Rejected vision pass: %s" % (label, last_reject))
                 break
 
-            cam_loc = cam.getLocation()
-            upp_loc = get_camera_units_per_pixel(cam)
             center_dx, center_dy, px, py = rect_center_machine_offset(
                 cam_loc, upp_loc, rr, width, height)
 
@@ -487,11 +513,6 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
             detected_mm = detected_loc.convertToUnits(LengthUnit.Millimeters)
             board_dx_mm = detected_mm.getX() - p_loc_mm.getX()
             board_dy_mm = detected_mm.getY() - p_loc_mm.getY()
-
-            log("[%s] attempt=%d pass=%d rects=%d chosen px=%.3f py=%.3f centered dx=%.6f dy=%.6f board dx=%.6f dy=%.6f mm angle=%.4f" %
-                (label, measurement_attempt, recenter_pass, len(rects),
-                 px, py, center_dx, center_dy, board_dx_mm, board_dy_mm,
-                 rr.angle))
 
             inside, view_dx, view_dy, half_x, half_y = \
                 detection_inside_initial_view(
@@ -509,6 +530,26 @@ def measure_board_fiducial_correction(mac, bl, board, prt, label):
                     "beyond MAX_NUDGE_MM board dx=%.6f dy=%.6f mm limit=%.6f" %
                     (board_dx_mm, board_dy_mm, MAX_NUDGE_MM))
                 log("[%s] Rejected vision pass: %s" % (label, last_reject))
+                break
+
+            reliable_world_loc, pending_suspect_loc, world_disagreement, world_state = \
+                resolve_world_measurement(
+                    reliable_world_loc, pending_suspect_loc, detected_loc,
+                    MAX_VISION_WORLD_DISAGREEMENT_MM)
+            cam_mm = cam_loc.convertToUnits(LengthUnit.Millimeters)
+            log("[%s] pass=%d rects=%d cam=(%.4f,%.4f) detected=(%.4f,%.4f) image=(%.6f,%.6f) world=%.6f state=%s angle=%.4f" %
+                (label, recenter_pass, len(rects), cam_mm.getX(), cam_mm.getY(),
+                 detected_mm.getX(), detected_mm.getY(), center_dx, center_dy,
+                 world_disagreement, world_state, rr.angle))
+            if world_state == "suspect":
+                last_reject = (
+                    "world disagreement %.6f mm exceeds %.6f mm" %
+                    (world_disagreement, MAX_VISION_WORLD_DISAGREEMENT_MM))
+                log("[%s] Rejected vision pass: %s" % (label, last_reject))
+                if recenter_pass < RECENTER_MAX_PASSES:
+                    log("[%s] Holding camera stationary for confirmation capture." %
+                        label)
+                    continue
                 break
 
             if (not FORCE_VISION_RECENTER or recenter_pass > 1) and abs(center_dx) <= RECENTER_TOLERANCE_MM and abs(center_dy) <= RECENTER_TOLERANCE_MM:
