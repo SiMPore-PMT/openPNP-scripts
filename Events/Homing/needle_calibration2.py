@@ -106,6 +106,10 @@ DEFAULT_CONFIG = {
         "hardware_fine_repeats": 2,
         "hardware_fine_retry_attempts": 2,
         "hardware_g38_attempts": 2,
+        # The controller's G38.2 result is the normal contact source. A
+        # separate M43 preflight is opt-in because existing machine configs
+        # may not expose a regex-readable contact response.
+        "hardware_preflight_contact_read": False,
         "hardware_start_recovery_attempts": 1,
         "hardware_start_radius_mm": 4.175,
         "hardware_coarse_max_travel_mm": 7.0,
@@ -1845,6 +1849,8 @@ def _run_xy_interrupt_once(nozzle, driver, actuator, post, dx, dy, feed,
         logger, label):
     attempts = _repeat_count(post.get("hardware_g38_attempts", 2),
         "post_xy.hardware_g38_attempts")
+    preflight_contact_read = config_bool(
+        post.get("hardware_preflight_contact_read", False), False)
     last_error = None
     for attempt in range(attempts):
         try:
@@ -1857,6 +1863,11 @@ def _run_xy_interrupt_once(nozzle, driver, actuator, post, dx, dy, feed,
         except Exception as error:
             last_error = error
         if attempt + 1 < attempts:
+            if not preflight_contact_read:
+                log_msg(logger,
+                    "%s G38 attempt %d/%d failed: %s; retrying from restored XY" %
+                    (label, attempt + 1, attempts, str(last_error)))
+                continue
             if actuator is None:
                 raise NeedleCalibrationSafetyError(
                     "%s G38 attempt %d failed: contact actuator is unavailable; "
@@ -2872,13 +2883,46 @@ def _bounded_hardware_start_radius(nozzle, center, angle, requested_radius,
 def _prepare_hardware_start(cfg, nozzle, actuator, post, center, angle, z_probe,
         start_x, start_y, ux, uy, start_radius, speed, logger, label,
         minimum_outward_mm=0.0):
-    """Require a released sensor before issuing a hardware G38 move."""
+    """Bound the start before G38; contact-read preflight is opt-in."""
     max_outward = abs(float(post.get("outside_recover_max_mm", 3.0)))
     if max_outward <= 0.0:
         raise NeedleCalibrationError(
             "%s: outside_recover_max_mm must be > 0 for hardware start safety" % label)
     max_safe_radius, limit_reason = _bounded_hardware_start_radius(nozzle,
         center, angle, float(start_radius) + max_outward, z_probe)
+    if not config_bool(post.get("hardware_preflight_contact_read", False), False):
+        # Preserve the original hardware-interrupt path: G38.2 owns contact
+        # detection and no M43 response is required before the first probe.
+        # If a near-start result requests recovery, move the required amount
+        # outward geometrically without introducing a contact-read dependency.
+        minimum_outward = max(0.0, float(minimum_outward_mm))
+        if minimum_outward <= 1.0e-9:
+            return {"location": get_movable_location(nozzle),
+                "start_radius_mm": float(start_radius),
+                "outward_recovery_mm": 0.0,
+                "max_safe_radius_mm": max_safe_radius,
+                "limit_reason": limit_reason}
+        if minimum_outward > max_outward + 1.0e-9:
+            raise NeedleCalibrationError(
+                "%s: required outward recovery %.6f mm exceeds configured maximum %.6f mm" %
+                (label, minimum_outward, max_outward))
+        if float(start_radius) + minimum_outward > max_safe_radius + 1.0e-9:
+            raise NeedleCalibrationError(
+                "%s: required outward recovery exceeds the reachable outward start envelope" %
+                label)
+        lift = abs(float(post.get("local_lift_mm", 0.60)))
+        current = get_movable_location(nozzle)
+        recovered_x = float(start_x) + float(ux) * minimum_outward
+        recovered_y = float(start_y) + float(uy) * minimum_outward
+        move_direct_speed(nozzle, mm_loc(recovered_x, recovered_y,
+            z_probe + lift, current.getRotation()), speed)
+        move_direct_speed(nozzle, mm_loc(recovered_x, recovered_y,
+            z_probe, current.getRotation()), speed)
+        return {"location": get_movable_location(nozzle),
+            "start_radius_mm": float(start_radius) + minimum_outward,
+            "outward_recovery_mm": minimum_outward,
+            "max_safe_radius_mm": max_safe_radius,
+            "limit_reason": limit_reason}
     recovered, outward = recover_outside_start_if_touching(nozzle, actuator,
         post, start_x, start_y, ux, uy, z_probe, speed, logger, label,
         start_radius_mm=start_radius, max_start_radius_mm=max_safe_radius,

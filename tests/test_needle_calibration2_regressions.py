@@ -366,7 +366,8 @@ class NeedleCalibrationHardwareSafetyTests(unittest.TestCase):
     def test_g38_controller_failure_retries_from_restored_xy(self):
         contact = FakeLocation("mm", 1.0, 2.0, 0.0, 0.0)
         actuator = object()
-        post = {"hardware_g38_attempts": 2, "hardware_channel": "Q1"}
+        post = {"hardware_g38_attempts": 2, "hardware_channel": "Q1",
+            "hardware_preflight_contact_read": True}
         logger = lambda unused_message: None
         with mock.patch.object(needle, "_run_xy_interrupt_attempt",
                 side_effect=[needle.NeedleCalibrationError("controller busy"), contact]) as attempt, \
@@ -383,7 +384,8 @@ class NeedleCalibrationHardwareSafetyTests(unittest.TestCase):
 
     def test_active_contact_after_failed_g38_aborts_before_retry(self):
         actuator = object()
-        post = {"hardware_g38_attempts": 3, "hardware_channel": "Q1"}
+        post = {"hardware_g38_attempts": 3, "hardware_channel": "Q1",
+            "hardware_preflight_contact_read": True}
         with mock.patch.object(needle, "_run_xy_interrupt_attempt",
                 side_effect=needle.NeedleCalibrationError("controller busy")) as attempt, \
                 mock.patch.object(needle, "dwell_for_read") as dwell, \
@@ -408,6 +410,7 @@ class NeedleCalibrationHardwareSafetyTests(unittest.TestCase):
 
         actuator = Actuator()
         post = {"hardware_g38_attempts": 2, "hardware_channel": "Q1",
+            "hardware_preflight_contact_read": True,
             "read_settle_ms": 0, "debounce_count": 2,
             "debounce_retries": 1, "debounce_interval_ms": 0}
         with mock.patch.object(needle, "_run_xy_interrupt_attempt",
@@ -419,7 +422,8 @@ class NeedleCalibrationHardwareSafetyTests(unittest.TestCase):
         attempt.assert_called_once()
 
     def test_missing_contact_actuator_disables_g38_retry(self):
-        post = {"hardware_g38_attempts": 2, "hardware_channel": "Q1"}
+        post = {"hardware_g38_attempts": 2, "hardware_channel": "Q1",
+            "hardware_preflight_contact_read": True}
         with mock.patch.object(needle, "_run_xy_interrupt_attempt",
                 side_effect=needle.NeedleCalibrationError("controller busy")) as attempt, \
                 mock.patch.object(needle, "read_contact_debounced") as read_state:
@@ -449,7 +453,8 @@ class NeedleCalibrationHardwareSafetyTests(unittest.TestCase):
         with mock.patch.object(needle, "read_contact_debounced") as read_state:
             with self.assertRaises(needle.NeedleCalibrationSafetyError) as raised:
                 needle._run_xy_interrupt_once(object(), driver, object(),
-                    {"hardware_g38_attempts": 3, "hardware_channel": "Q1"},
+                    {"hardware_g38_attempts": 3, "hardware_channel": "Q1",
+                     "hardware_preflight_contact_read": True},
                     -1.0, 0.0, 500.0, None, "restore-failure test")
         read_state.assert_not_called()
         message = str(raised.exception)
@@ -525,11 +530,12 @@ class NeedleCalibrationHardwareSafetyTests(unittest.TestCase):
             needle._hardware_xy_start_violation(nozzle,
                 {"x": 0.0, "y": 0.0}, 0.0, 4.175, 0.0)
 
-    def test_hardware_coarse_start_checks_sensor_before_g38(self):
-        # Every movement and interrupt call is mocked; this checks for a
-        # software preflight/recovery decision without touching machine IO.
+    def test_hardware_coarse_start_uses_controller_g38_without_preflight_read(self):
+        # Existing machine configs use G38.2 as the contact source. The
+        # optional M43 preflight must not block the first hardware probe.
         nozzle = object()
         post = copy.deepcopy(needle.DEFAULT_CONFIG["post_xy"])
+        post["hardware_g38_attempts"] = 1
         cfg = {"post_xy": post, "travel_speed": 1.0}
         with mock.patch.object(needle, "get_movable_location",
                 return_value=FakeLocation("mm", 0, 0, 0, 0)), \
@@ -545,8 +551,8 @@ class NeedleCalibrationHardwareSafetyTests(unittest.TestCase):
             with self.assertRaises(needle.NeedleCalibrationError):
                 needle.probe_post_edge_hardware(cfg, nozzle, object(),
                     {"x": 0, "y": 0}, 0, 3.175, 0.0)
-        read_state.assert_called()
-        interrupt.assert_not_called()
+        read_state.assert_not_called()
+        interrupt.assert_called_once()
 
     def test_outside_start_recovers_outward_until_contact_releases(self):
         state = {"location": FakeLocation("mm", 4.175, 0, 0, 0)}
