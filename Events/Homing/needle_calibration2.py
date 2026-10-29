@@ -592,6 +592,21 @@ def wait_still(movable):
 
 def move_safe(movable, target):
     target = target.convertToUnits(LengthUnit.Millimeters)
+    current = get_movable_location(movable)
+    # MovableUtils treats a tiny transformed XY discrepancy as a lateral move
+    # and then runs the head-wide safe-Z sequence. After the camera has placed
+    # the head, the first radial hardware start is often already within a few
+    # microns of the nozzle position. On this machine that sequence can repeat
+    # the raw safe-Z command without ever reaching the requested Z target.
+    # If there is no meaningful lateral or rotational move, a direct Z-only
+    # move is safe and avoids that planner loop.
+    xy_delta = math.sqrt(math.pow(float(target.getX()) - float(current.getX()), 2.0) +
+        math.pow(float(target.getY()) - float(current.getY()), 2.0))
+    rotation_delta = abs(float(target.getRotation()) -
+        float(current.getRotation()))
+    if xy_delta <= 0.01 and rotation_delta <= 0.01:
+        move_direct_speed(movable, target)
+        return
     MovableUtils.moveToLocationAtSafeZ(movable, target)
     wait_still(movable)
 

@@ -338,6 +338,24 @@ class NeedleCalibrationGeometryTests(unittest.TestCase):
 
 
 class NeedleCalibrationHardwareSafetyTests(unittest.TestCase):
+    def test_move_safe_uses_direct_z_when_xy_is_already_at_target(self):
+        current = FakeLocation("mm", 319.560512, 396.903109, 20.0, 0.05)
+        target = FakeLocation("mm", 319.559758, 396.905457, 6.9, 0.05)
+        movable = object()
+        with mock.patch.object(needle, "get_movable_location",
+                return_value=current), \
+                mock.patch.object(needle, "move_direct_speed") as direct_move, \
+                mock.patch.object(needle, "MovableUtils") as movable_utils:
+            needle.move_safe(movable, target)
+        direct_move.assert_called_once()
+        self.assertIs(direct_move.call_args.args[0], movable)
+        moved_target = direct_move.call_args.args[1]
+        self.assertAlmostEqual(moved_target.getX(), target.getX())
+        self.assertAlmostEqual(moved_target.getY(), target.getY())
+        self.assertAlmostEqual(moved_target.getZ(), target.getZ())
+        self.assertAlmostEqual(moved_target.getRotation(), target.getRotation())
+        movable_utils.moveToLocationAtSafeZ.assert_not_called()
+
     def test_active_start_travel_is_rejected_as_stale_or_preexisting_contact(self):
         sample = {"travel_mm": 0.002941, "cross_track_error_mm": 0.0}
         with self.assertRaisesRegex(needle.NeedleCalibrationError,
