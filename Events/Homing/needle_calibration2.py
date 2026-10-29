@@ -110,7 +110,7 @@ DEFAULT_CONFIG = {
         # separate M43 preflight is opt-in because existing machine configs
         # may not expose a regex-readable contact response.
         "hardware_preflight_contact_read": False,
-        "hardware_start_recovery_attempts": 1,
+        "hardware_near_zero_recovery_steps_mm": [1.0, 2.0],
         "hardware_start_radius_mm": 4.175,
         "hardware_coarse_max_travel_mm": 7.0,
         "hardware_min_coarse_travel_mm": 0.25,
@@ -1123,6 +1123,15 @@ def _repeat_count(value, label, minimum=1):
     return result
 
 
+def _positive_distance_sequence(value, label):
+    if not isinstance(value, (list, tuple)):
+        raise NeedleCalibrationError("%s must be a list of positive distances" % label)
+    result = []
+    for index, distance in enumerate(value):
+        result.append(_positive_feed(distance, "%s[%d]" % (label, index)))
+    return result
+
+
 def _probe_channel(value, label):
     channel = str(value or "").strip().upper()
     if channel not in ["Q0", "Q1"]:
@@ -1983,6 +1992,18 @@ def probe_post_edge_hardware(cfg, nozzle, actuator, center, angle_deg,
     min_coarse_travel = _positive_feed(
         post.get("hardware_min_coarse_travel_mm", 0.25),
         "post_xy.hardware_min_coarse_travel_mm")
+    near_zero_recovery_steps = _positive_distance_sequence(
+        post.get("hardware_near_zero_recovery_steps_mm", [1.0, 2.0]),
+        "post_xy.hardware_near_zero_recovery_steps_mm")
+    max_outward_recovery = abs(float(post.get("outside_recover_max_mm", 3.0)))
+    if max_outward_recovery <= 0.0:
+        raise NeedleCalibrationError(
+            "post_xy.outside_recover_max_mm must be > 0 for coarse recovery")
+    near_zero_recovery_targets = []
+    recovery_target = 0.0
+    for distance in near_zero_recovery_steps:
+        recovery_target += distance
+        near_zero_recovery_targets.append(recovery_target)
     fine_backoff = _positive_feed(post.get("hardware_fine_retract_mm", 1.0),
         "post_xy.hardware_fine_retract_mm")
     fine_travel = _positive_feed(post.get("hardware_fine_max_travel_mm", 2.0),
@@ -2030,16 +2051,23 @@ def probe_post_edge_hardware(cfg, nozzle, actuator, center, angle_deg,
         log_msg(logger, "%s start envelope limited by soft limit: %s" %
             (label, prepared.get("limit_reason")))
     coarse_samples = []
-    coarse_start_recoveries = 0
-    coarse_start_recovery_limit = _repeat_count(
-        post.get("hardware_start_recovery_attempts", 1),
-        "post_xy.hardware_start_recovery_attempts", minimum=0)
+    near_zero_origin_radius = None
+    near_zero_base_travel_limit = None
+    near_zero_recovered_mm = 0.0
+    near_zero_recovery_index = 0
     for index in range(coarse_count):
         sample_label = "%s coarse %d/%d" % (label, index + 1, coarse_count)
         while True:
             move_direct_speed(nozzle, mm_loc(start_x, start_y, z_probe, rotation),
                 cfg.get("travel_speed", 1.0))
-            prepared = _prepare_hardware_start(cfg, nozzle, actuator, post, center,
+            start_check_post = post
+            if near_zero_origin_radius is not None:
+                remaining_recovery = max_outward_recovery - near_zero_recovered_mm
+                start_check_post = dict(post)
+                start_check_post["outside_recover_max_mm"] = max(
+                    1.0e-9, remaining_recovery)
+            prepared = _prepare_hardware_start(cfg, nozzle, actuator,
+                start_check_post, center,
                 angle_deg, z_probe, start_x, start_y, ux, uy, start_dist,
                 cfg.get("travel_speed", 1.0), logger, sample_label)
             if prepared["outward_recovery_mm"] > 0.0:
@@ -2047,7 +2075,16 @@ def probe_post_edge_hardware(cfg, nozzle, actuator, center, angle_deg,
                 start_x = float(recovered.getX())
                 start_y = float(recovered.getY())
                 start_dist = float(prepared["start_radius_mm"])
-                travel_limit += float(prepared["outward_recovery_mm"])
+                if near_zero_origin_radius is None:
+                    travel_limit += float(prepared["outward_recovery_mm"])
+                else:
+                    near_zero_recovered_mm = start_dist - near_zero_origin_radius
+                    if near_zero_recovered_mm > max_outward_recovery + 1.0e-9:
+                        raise NeedleCalibrationSafetyError(
+                            "%s: outside-start recovery exceeded the %.6f mm "
+                            "cumulative envelope" %
+                            (sample_label, max_outward_recovery))
+                    travel_limit = near_zero_base_travel_limit + near_zero_recovered_mm
                 log_msg(logger, "%s coarse start recovery outward=%s "
                     "effectiveTravel=%s" %
                     (label, fmt_float(prepared["outward_recovery_mm"]),
@@ -2059,49 +2096,100 @@ def probe_post_edge_hardware(cfg, nozzle, actuator, center, angle_deg,
             try:
                 validated = _validate_radial_contact(sample, travel_limit,
                     contact_tolerance, sample_label, min_travel=min_coarse_travel)
-            except NeedleCalibrationError:
+            except NeedleCalibrationError as validation_error:
                 near_start = (float(sample.get("travel_mm", 0.0)) <
                     float(min_coarse_travel) and
                     float(sample.get("cross_track_error_mm", 0.0)) <=
                     max(0.02, contact_tolerance))
-                if not near_start or coarse_start_recoveries >= coarse_start_recovery_limit:
+                if not near_start:
                     raise
-                coarse_start_recoveries += 1
-                required_outward = (float(min_coarse_travel) -
-                    float(sample.get("travel_mm", 0.0)) + 0.01)
-                log_msg(logger,
-                    "%s reported near-zero coarse travel %.6f mm; "
-                    "lifting and attempting bounded outward recovery %.6f mm (%d/%d)" %
-                    (sample_label, float(sample.get("travel_mm", 0.0)),
-                     required_outward,
-                     coarse_start_recoveries, coarse_start_recovery_limit))
                 current = get_movable_location(nozzle)
                 move_direct_speed(nozzle, mm_loc(current.getX(), current.getY(),
                     z_probe + lift, current.getRotation()),
                     cfg.get("travel_speed", 1.0))
-                prepared = _prepare_hardware_start(cfg, nozzle, actuator, post,
-                    center, angle_deg, z_probe, start_x, start_y, ux, uy,
-                    start_dist, cfg.get("travel_speed", 1.0), logger,
-                    sample_label + " near-zero recovery",
-                    minimum_outward_mm=required_outward)
-                forced_outward = float(prepared["outward_recovery_mm"])
-                if forced_outward + 1.0e-9 < required_outward:
+                if near_zero_origin_radius is None:
+                    near_zero_origin_radius = start_dist
+                    near_zero_base_travel_limit = travel_limit
+                    near_zero_recovered_mm = 0.0
+                while (near_zero_recovery_index <
+                        len(near_zero_recovery_targets) and
+                        near_zero_recovery_targets[near_zero_recovery_index] <=
+                        near_zero_recovered_mm + 1.0e-9):
+                    near_zero_recovery_index += 1
+                if near_zero_recovery_index >= len(near_zero_recovery_targets):
                     raise NeedleCalibrationError(
-                        "%s: bounded recovery moved %.6f mm, less than the "
-                        "%.6f mm required to clear minimum coarse travel" %
-                        (sample_label, forced_outward, required_outward))
+                        "%s reported only %.6f mm inward travel and remained "
+                        "near immediate contact after %.6f mm cumulative outward "
+                        "recovery; aborting without another G38 (%s)" %
+                        (sample_label, float(sample.get("travel_mm", 0.0)),
+                         near_zero_recovered_mm, str(validation_error)))
+                requested_cumulative = near_zero_recovery_targets[
+                    near_zero_recovery_index]
+                if requested_cumulative > max_outward_recovery + 1.0e-9:
+                    raise NeedleCalibrationError(
+                        "%s requires %.6f mm cumulative outward recovery, "
+                        "exceeding outside_recover_max_mm %.6f; aborting safely" %
+                        (sample_label, requested_cumulative,
+                         max_outward_recovery))
+                required_outward = requested_cumulative - near_zero_recovered_mm
+                if required_outward <= 1.0e-9:
+                    raise NeedleCalibrationError(
+                        "%s cannot make a distinct outward recovery move; "
+                        "aborting without another G38" % sample_label)
+                remaining_recovery = max_outward_recovery - near_zero_recovered_mm
+                recovery_post = dict(post)
+                recovery_post["outside_recover_max_mm"] = remaining_recovery
+                log_msg(logger,
+                    "%s reported near-zero coarse travel %.6f mm; "
+                    "retracting and moving %.6f mm outward to %.6f mm "
+                    "cumulative recovery (%d/%d)" %
+                    (sample_label, float(sample.get("travel_mm", 0.0)),
+                     required_outward, requested_cumulative,
+                     near_zero_recovery_index + 1,
+                     len(near_zero_recovery_targets)))
+                try:
+                    prepared = _prepare_hardware_start(cfg, nozzle, actuator,
+                        recovery_post, center, angle_deg, z_probe, start_x,
+                        start_y, ux, uy, start_dist,
+                        cfg.get("travel_speed", 1.0), logger,
+                        sample_label + " near-zero recovery",
+                        minimum_outward_mm=required_outward)
+                except NeedleCalibrationSafetyError:
+                    raise
+                except NeedleCalibrationError as recovery_error:
+                    raise NeedleCalibrationError(
+                        "%s: outward recovery to %.6f mm was blocked by the "
+                        "reachable machine envelope: %s" %
+                        (sample_label, requested_cumulative,
+                         str(recovery_error)))
+                forced_outward = float(prepared["outward_recovery_mm"])
+                if forced_outward <= 1.0e-9:
+                    raise NeedleCalibrationError(
+                        "%s: bounded recovery made no outward movement; "
+                        "aborting without another G38" % sample_label)
+                near_zero_recovered_mm += forced_outward
+                if near_zero_recovered_mm > max_outward_recovery + 1.0e-9:
+                    raise NeedleCalibrationSafetyError(
+                        "%s: cumulative outward recovery %.6f mm exceeds "
+                        "outside_recover_max_mm %.6f" %
+                        (sample_label, near_zero_recovered_mm,
+                         max_outward_recovery))
+                if near_zero_recovered_mm + 1.0e-9 < requested_cumulative:
+                    raise NeedleCalibrationError(
+                        "%s: recovery reached %.6f mm cumulative, short of "
+                        "requested %.6f mm; aborting without another G38" %
+                        (sample_label, near_zero_recovered_mm,
+                         requested_cumulative))
                 recovered = prepared["location"]
                 start_x = float(recovered.getX())
                 start_y = float(recovered.getY())
                 start_dist = float(prepared["start_radius_mm"])
-                travel_limit += forced_outward
-                log_msg(logger, "%s forced outward retry radius=%s "
-                    "effectiveTravel=%s" % (sample_label,
-                    fmt_float(start_dist), fmt_float(travel_limit)))
-                move_direct_speed(nozzle, mm_loc(start_x, start_y,
-                    z_probe + lift, rotation), cfg.get("travel_speed", 1.0))
-                move_direct_speed(nozzle, mm_loc(start_x, start_y, z_probe,
-                    rotation), cfg.get("travel_speed", 1.0))
+                travel_limit = near_zero_base_travel_limit + near_zero_recovered_mm
+                near_zero_recovery_index += 1
+                log_msg(logger, "%s outward recovery complete cumulative=%s "
+                    "startRadius=%s effectiveCoarseTravel=%s" %
+                    (sample_label, fmt_float(near_zero_recovered_mm),
+                     fmt_float(start_dist), fmt_float(travel_limit)))
                 continue
             coarse_samples.append(validated)
             break
@@ -2109,8 +2197,8 @@ def probe_post_edge_hardware(cfg, nozzle, actuator, center, angle_deg,
             (sample_label, fmt_float(sample["travel_mm"]),
              fmt_float(sample["cross_track_error_mm"])))
     coarse_travel = sum([item["travel_mm"] for item in coarse_samples]) / float(coarse_count)
-    coarse_x = start_x - ux * coarse_travel
-    coarse_y = start_y - uy * coarse_travel
+    coarse_x = sum([item["x"] for item in coarse_samples]) / float(coarse_count)
+    coarse_y = sum([item["y"] for item in coarse_samples]) / float(coarse_count)
 
     coarse_radius = ((coarse_x - float(center["x"])) * ux +
         (coarse_y - float(center["y"])) * uy)
