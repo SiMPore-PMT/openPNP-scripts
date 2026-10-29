@@ -634,15 +634,64 @@ class NeedleCalibrationHardwareSafetyTests(unittest.TestCase):
         self.assertAlmostEqual(vectors[0][0], -7.0, places=6)
         self.assertAlmostEqual(vectors[1][0], -8.0, places=6)
         self.assertAlmostEqual(result["coarse_samples"][0]["travel_mm"], 2.0)
-        self.assertTrue(any(abs(x - 5.175) < 1.0e-6 and abs(z - 0.6) < 1.0e-6
+        self.assertTrue(any(abs(x - 5.175) < 1.0e-6 and abs(z - 25.0) < 1.0e-6
             for x, unused_y, z in movements))
         recovery_safe_index = next(index for index, movement in
             enumerate(movements) if abs(movement[0] - 5.175) < 1.0e-6 and
-            abs(movement[2] - 0.6) < 1.0e-6)
+            abs(movement[2] - 25.0) < 1.0e-6)
         recovery_probe_index = next(index for index, movement in
             enumerate(movements) if abs(movement[0] - 5.175) < 1.0e-6 and
             abs(movement[2]) < 1.0e-6)
         self.assertLess(recovery_safe_index, recovery_probe_index)
+
+    def test_optional_preflight_counts_toward_angle_recovery_cap(self):
+        nozzle = FakeNozzle()
+        post = copy.deepcopy(needle.DEFAULT_CONFIG["post_xy"])
+        post["hardware_preflight_contact_read"] = True
+        post["hardware_g38_attempts"] = 1
+        post["hardware_fine_repeats"] = 1
+        post["hardware_fine_retry_attempts"] = 0
+        cfg = {"post_xy": post, "travel_speed": 1.0}
+        coarse_starts = []
+        coarse_travels = iter([0.001, 2.0])
+        read_values = iter([True, True, False, False])
+
+        def fake_move(unused_nozzle, target, unused_speed=None):
+            nozzle.location = target
+
+        def fake_read(*unused_args, **unused_kwargs):
+            try:
+                return next(read_values)
+            except StopIteration:
+                return False
+
+        def fake_interrupt(unused_nozzle, unused_driver, unused_actuator,
+                unused_post, unused_dx, unused_dy, unused_feed, unused_logger,
+                label):
+            if "coarse" in label:
+                start_x = nozzle.location.getX()
+                coarse_starts.append(start_x)
+                return FakeLocation("mm", start_x - next(coarse_travels),
+                    0.0, 0.0, 0.0)
+            return FakeLocation("mm", 3.175, 0.0, 0.0, 0.0)
+
+        with mock.patch.object(needle, "_driver_for_probe", return_value=object()), \
+                mock.patch.object(needle, "move_safe", side_effect=fake_move), \
+                mock.patch.object(needle, "move_direct_speed", side_effect=fake_move), \
+                mock.patch.object(needle, "dwell_for_read"), \
+                mock.patch.object(needle, "read_contact_debounced",
+                    side_effect=fake_read), \
+                mock.patch.object(needle, "_bounded_hardware_start_radius",
+                    side_effect=lambda unused_nozzle, unused_center, unused_angle,
+                        radius, unused_z: (float(radius), None)), \
+                mock.patch.object(needle, "_run_xy_interrupt_once",
+                    side_effect=fake_interrupt):
+            result = needle.probe_post_edge_hardware(cfg, nozzle, object(),
+                {"x": 0.0, "y": 0.0}, 0.0, 3.175, 0.0)
+        self.assertEqual(2, len(coarse_starts))
+        self.assertAlmostEqual(coarse_starts[0], 4.675, places=6)
+        self.assertAlmostEqual(coarse_starts[1], 5.175, places=6)
+        self.assertAlmostEqual(result["x"], 3.175, places=6)
 
     def test_persistent_near_zero_recovers_to_three_mm_cumulative(self):
         result, starts, vectors, unused_movements, unused_nozzle = \
@@ -686,7 +735,7 @@ class NeedleCalibrationHardwareSafetyTests(unittest.TestCase):
                     {"x": 0.0, "y": 0.0}, 0.0, 3.175, 0.0)
         self.assertEqual(3, len(coarse_starts))
         self.assertAlmostEqual(coarse_starts[-1], 7.175, places=6)
-        self.assertAlmostEqual(nozzle.location.getZ(), 0.6, places=6)
+        self.assertAlmostEqual(nozzle.location.getZ(), 25.0, places=6)
 
     def test_configured_cumulative_recovery_cap_blocks_later_step(self):
         nozzle = FakeNozzle()
@@ -721,7 +770,7 @@ class NeedleCalibrationHardwareSafetyTests(unittest.TestCase):
         self.assertEqual(2, len(starts))
         self.assertAlmostEqual(starts[1], 5.175, places=6)
         self.assertAlmostEqual(nozzle.location.getX(), 5.175, places=6)
-        self.assertAlmostEqual(nozzle.location.getZ(), 0.6, places=6)
+        self.assertAlmostEqual(nozzle.location.getZ(), 25.0, places=6)
 
     def test_soft_limit_blocks_first_and_second_recovery_safely(self):
         for safe_radius, coarse_contacts in [(4.8, [0.001]),
@@ -766,7 +815,7 @@ class NeedleCalibrationHardwareSafetyTests(unittest.TestCase):
                         needle.probe_post_edge_hardware(cfg, nozzle, object(),
                             {"x": 0.0, "y": 0.0}, 0.0, 3.175, 0.0)
                 self.assertEqual(len(coarse_contacts), len(starts))
-                self.assertAlmostEqual(nozzle.location.getZ(), 0.6, places=6)
+                self.assertAlmostEqual(nozzle.location.getZ(), 25.0, places=6)
 
     def test_recovery_with_multiple_coarse_samples_preserves_xy_measurement(self):
         # First repeat contacts normally; second reports an active-start hit,
