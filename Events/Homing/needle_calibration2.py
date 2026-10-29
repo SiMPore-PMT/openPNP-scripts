@@ -36,6 +36,10 @@ class NeedleCalibrationError(Exception):
     pass
 
 
+class NeedleCalibrationSafetyError(NeedleCalibrationError):
+    """A machine state could not be restored or bounded safely."""
+
+
 DEFAULT_CONFIG = {
     "schema_version": 6,
     "head_name": "",
@@ -102,6 +106,7 @@ DEFAULT_CONFIG = {
         "hardware_fine_repeats": 2,
         "hardware_fine_retry_attempts": 2,
         "hardware_g38_attempts": 2,
+        "hardware_start_recovery_attempts": 1,
         "hardware_start_radius_mm": 4.175,
         "hardware_coarse_max_travel_mm": 7.0,
         "hardware_min_coarse_travel_mm": 0.25,
@@ -123,6 +128,13 @@ DEFAULT_CONFIG = {
         "local_lift_mm": 0.60,
         "outside_recover_step_mm": 0.25,
         "outside_recover_max_mm": 3.0,
+        "min_angular_coverage_deg": 180.0,
+        "max_angular_gap_deg": 180.0,
+        "max_geometry_condition": 10.0,
+        "max_contact_line_error_mm": 0.20,
+        "max_pair_projection_error_mm": 0.20,
+        "max_center_disagreement_mm": 0.20,
+        "min_fitted_radius_tolerance_mm": 0.05,
         "max_fit_rms_mm": 0.15,
         "max_fit_error_mm": 0.30,
         "max_center_error_mm": 2.0,
@@ -1583,27 +1595,62 @@ def post_scan_settings(cfg):
 
 
 def recover_outside_start_if_touching(nozzle, actuator, read_cfg, start_x, start_y,
-        ux, uy, z_probe, speed, logger=None, label="edge"):
+        ux, uy, z_probe, speed, logger=None, label="edge",
+        start_radius_mm=None, max_start_radius_mm=None,
+        minimum_outward_mm=0.0):
     dwell_for_read(read_cfg)
     touching = read_contact_debounced(actuator, read_cfg, logger=logger,
-        label=label + " outside")
+        label=label + " outside", mixed_result=True)
     log_msg(logger, "%s outside pos=%s contact=%s" %
         (label, fmt_xy(start_x, start_y), touching))
-    if not touching:
-        return get_movable_location(nozzle), 0.0
-
-    log_msg(logger, "%s outside touching; recovering outward" % label)
+    minimum_outward = max(0.0, float(minimum_outward_mm))
     step = abs(float(read_cfg.get("outside_recover_step_mm", 0.25)))
     max_outward = abs(float(read_cfg.get("outside_recover_max_mm", 3.0)))
     if step <= 0.0:
         raise NeedleCalibrationError("%s: outside_recover_step_mm must be > 0" % label)
+    if max_outward <= 0.0:
+        raise NeedleCalibrationError("%s: outside_recover_max_mm must be > 0" % label)
+    if not touching and minimum_outward <= 1.0e-9:
+        return get_movable_location(nozzle), 0.0
+
+    if minimum_outward > max_outward + 1.0e-9:
+        raise NeedleCalibrationError(
+            "%s: required outward recovery %.6f mm exceeds configured maximum %.6f mm" %
+            (label, minimum_outward, max_outward))
+    log_msg(logger, "%s outside %s; recovering outward" %
+        (label, "touching" if touching else "clear but insufficient coarse travel"))
+    lift = abs(float(read_cfg.get("local_lift_mm", 0.60)))
+    current = get_movable_location(nozzle)
+    if float(current.getZ()) < float(z_probe) + lift - 1.0e-9:
+        move_direct_speed(nozzle, mm_loc(current.getX(), current.getY(),
+            z_probe + lift, current.getRotation()), speed)
     outward = 0.0
     index = 0
-    while outward < max_outward - 1.0e-9:
-        outward = min(max_outward, outward + step)
+    while touching or outward < minimum_outward - 1.0e-9:
+        if outward >= max_outward - 1.0e-9:
+            break
+        next_outward = min(max_outward, max(outward + step, minimum_outward))
+        if max_start_radius_mm is not None and start_radius_mm is not None:
+            available = float(max_start_radius_mm) - float(start_radius_mm)
+            if available <= outward + 1.0e-9:
+                cur = get_movable_location(nozzle)
+                lift = abs(float(read_cfg.get("local_lift_mm", 0.60)))
+                move_direct_speed(nozzle, mm_loc(cur.getX(), cur.getY(),
+                    z_probe + lift, cur.getRotation()), speed)
+                raise NeedleCalibrationError(
+                    "%s: active contact could not be released within the "
+                    "reachable outward start envelope (start radius %.6f mm, "
+                    "maximum safe radius %.6f mm)" %
+                    (label, float(start_radius_mm), float(max_start_radius_mm)))
+            next_outward = min(next_outward, available)
+        if next_outward <= outward + 1.0e-9:
+            break
+        outward = next_outward
         index += 1
         x = float(start_x) + float(ux) * outward
         y = float(start_y) + float(uy) * outward
+        move_direct_speed(nozzle, mm_loc(x, y, z_probe + lift,
+            get_movable_location(nozzle).getRotation()), speed)
         move_direct_speed(nozzle, mm_loc(x, y, z_probe,
             get_movable_location(nozzle).getRotation()), speed)
         dwell_for_read(read_cfg)
@@ -1611,11 +1658,10 @@ def recover_outside_start_if_touching(nozzle, actuator, read_cfg, start_x, start
             label=label + " recover step %d" % index)
         log_msg(logger, "%s recover step=%d outward=%s pos=%s contact=%s" %
             (label, index, fmt_float(outward), fmt_xy(x, y), touching))
-        if not touching:
+        if not touching and outward >= minimum_outward - 1.0e-9:
             return get_movable_location(nozzle), outward
 
     cur = get_movable_location(nozzle)
-    lift = abs(float(read_cfg.get("local_lift_mm", 0.60)))
     move_direct_speed(nozzle, mm_loc(cur.getX(), cur.getY(), z_probe + lift,
         cur.getRotation()), speed)
     raise NeedleCalibrationError(
@@ -1747,6 +1793,7 @@ def _run_xy_interrupt_attempt(nozzle, driver, post, dx, dy, feed, logger, label)
         "post_xy.hardware_probe_acceleration")
     contact = None
     restore_errors = []
+    probe_error = None
     try:
         _drain_driver_queue(driver)
         for command in ["M400", "M204 S%.3f" % acceleration, "G60 S0", "G91"]:
@@ -1758,17 +1805,29 @@ def _run_xy_interrupt_attempt(nozzle, driver, post, dx, dy, feed, logger, label)
         contact = _reported_nozzle_location(nozzle, driver.getReportedLocation(-1))
         _drain_driver_queue(driver)
         log_msg(logger, "%s interrupt contact %s" % (label, loc_to_log(contact)))
+    except Throwable as error:
+        probe_error = error
+    except Exception as error:
+        probe_error = error
     finally:
         restore_errors = _restore_saved_xy(driver)
     if restore_errors:
-        raise NeedleCalibrationError("%s failed to restore G90/saved XY: %s" %
-            (label, "; ".join(restore_errors)))
+        detail = ""
+        if probe_error is not None:
+            detail = "; G38 operation also failed: %s" % str(probe_error)
+        raise NeedleCalibrationSafetyError(
+            "%s SAFETY-CRITICAL: failed to restore G90/saved XY: %s%s; "
+            "interrupt retry is unsafe" %
+            (label, "; ".join(restore_errors), detail))
+    if probe_error is not None:
+        raise probe_error
     if contact is None:
         raise NeedleCalibrationError("%s did not return a contact position" % label)
     return contact
 
 
-def _run_xy_interrupt_once(nozzle, driver, post, dx, dy, feed, logger, label):
+def _run_xy_interrupt_once(nozzle, driver, actuator, post, dx, dy, feed,
+        logger, label):
     attempts = _repeat_count(post.get("hardware_g38_attempts", 2),
         "post_xy.hardware_g38_attempts")
     last_error = None
@@ -1776,11 +1835,38 @@ def _run_xy_interrupt_once(nozzle, driver, post, dx, dy, feed, logger, label):
         try:
             return _run_xy_interrupt_attempt(nozzle, driver, post, dx, dy,
                 feed, logger, label)
+        except NeedleCalibrationSafetyError:
+            raise
         except Throwable as error:
             last_error = error
         except Exception as error:
             last_error = error
         if attempt + 1 < attempts:
+            if actuator is None:
+                raise NeedleCalibrationSafetyError(
+                    "%s G38 attempt %d failed: contact actuator is unavailable; "
+                    "refusing an unverified retry: %s" %
+                    (label, attempt + 1, str(last_error)))
+            dwell_for_read(post)
+            try:
+                contact_active = read_contact_debounced(actuator, post,
+                    logger=logger, label=label + " retry release check",
+                    mixed_result=True)
+            except Throwable as error:
+                raise NeedleCalibrationSafetyError(
+                    "%s G38 attempt %d failed and contact release could not be "
+                    "verified; refusing retry: %s" %
+                    (label, attempt + 1, str(error)))
+            except Exception as error:
+                raise NeedleCalibrationSafetyError(
+                    "%s G38 attempt %d failed and contact release could not be "
+                    "verified; refusing retry: %s" %
+                    (label, attempt + 1, str(error)))
+            if contact_active:
+                raise NeedleCalibrationSafetyError(
+                    "%s G38 attempt %d failed but contact remains active or "
+                    "unstable; refusing retry: %s" %
+                    (label, attempt + 1, str(last_error)))
             log_msg(logger, "%s G38 attempt %d/%d failed: %s; retrying from restored XY" %
                 (label, attempt + 1, attempts, str(last_error)))
     raise last_error
@@ -1895,17 +1981,104 @@ def probe_post_edge_hardware(cfg, nozzle, actuator, center, angle_deg,
          fmt_float(travel_limit)))
 
     move_safe(nozzle, mm_loc(start_x, start_y, z_probe + lift, rotation))
+    move_direct_speed(nozzle, mm_loc(start_x, start_y, z_probe, rotation),
+        cfg.get("travel_speed", 1.0))
+    prepared = _prepare_hardware_start(cfg, nozzle, actuator, post, center,
+        angle_deg, z_probe, start_x, start_y, ux, uy, start_dist,
+        cfg.get("travel_speed", 1.0), logger, label)
+    if prepared["outward_recovery_mm"] > 0.0:
+        recovered = prepared["location"]
+        start_x = float(recovered.getX())
+        start_y = float(recovered.getY())
+        start_dist = float(prepared["start_radius_mm"])
+        # The contact envelope is fixed in machine coordinates; moving the
+        # released start outward increases the required inward travel by the
+        # same bounded amount. Keep the original coarse limit as the base.
+        travel_limit += float(prepared["outward_recovery_mm"])
+        log_msg(logger,
+            "%s released-start recovery outward=%s startRadius=%s "
+            "effectiveCoarseTravel=%s" %
+            (label, fmt_float(prepared["outward_recovery_mm"]),
+             fmt_float(start_dist), fmt_float(travel_limit)))
+    elif prepared.get("limit_reason") is not None:
+        log_msg(logger, "%s start envelope limited by soft limit: %s" %
+            (label, prepared.get("limit_reason")))
     coarse_samples = []
+    coarse_start_recoveries = 0
+    coarse_start_recovery_limit = _repeat_count(
+        post.get("hardware_start_recovery_attempts", 1),
+        "post_xy.hardware_start_recovery_attempts", minimum=0)
     for index in range(coarse_count):
-        move_direct_speed(nozzle, mm_loc(start_x, start_y, z_probe, rotation),
-            cfg.get("travel_speed", 1.0))
-        reported = _run_xy_interrupt_once(nozzle, driver, post,
-            -ux * travel_limit, -uy * travel_limit, coarse_feed, logger,
-            "%s coarse %d/%d" % (label, index + 1, coarse_count))
-        sample = _radial_contact(start_x, start_y, ux, uy, reported)
         sample_label = "%s coarse %d/%d" % (label, index + 1, coarse_count)
-        coarse_samples.append(_validate_radial_contact(sample, travel_limit,
-            contact_tolerance, sample_label, min_travel=min_coarse_travel))
+        while True:
+            move_direct_speed(nozzle, mm_loc(start_x, start_y, z_probe, rotation),
+                cfg.get("travel_speed", 1.0))
+            prepared = _prepare_hardware_start(cfg, nozzle, actuator, post, center,
+                angle_deg, z_probe, start_x, start_y, ux, uy, start_dist,
+                cfg.get("travel_speed", 1.0), logger, sample_label)
+            if prepared["outward_recovery_mm"] > 0.0:
+                recovered = prepared["location"]
+                start_x = float(recovered.getX())
+                start_y = float(recovered.getY())
+                start_dist = float(prepared["start_radius_mm"])
+                travel_limit += float(prepared["outward_recovery_mm"])
+                log_msg(logger, "%s coarse start recovery outward=%s "
+                    "effectiveTravel=%s" %
+                    (label, fmt_float(prepared["outward_recovery_mm"]),
+                     fmt_float(travel_limit)))
+            reported = _run_xy_interrupt_once(nozzle, driver, actuator, post,
+                -ux * travel_limit, -uy * travel_limit, coarse_feed, logger,
+                sample_label)
+            sample = _radial_contact(start_x, start_y, ux, uy, reported)
+            try:
+                validated = _validate_radial_contact(sample, travel_limit,
+                    contact_tolerance, sample_label, min_travel=min_coarse_travel)
+            except NeedleCalibrationError:
+                near_start = (float(sample.get("travel_mm", 0.0)) <
+                    float(min_coarse_travel) and
+                    float(sample.get("cross_track_error_mm", 0.0)) <=
+                    max(0.02, contact_tolerance))
+                if not near_start or coarse_start_recoveries >= coarse_start_recovery_limit:
+                    raise
+                coarse_start_recoveries += 1
+                required_outward = (float(min_coarse_travel) -
+                    float(sample.get("travel_mm", 0.0)) + 0.01)
+                log_msg(logger,
+                    "%s reported near-zero coarse travel %.6f mm; "
+                    "lifting and attempting bounded outward recovery %.6f mm (%d/%d)" %
+                    (sample_label, float(sample.get("travel_mm", 0.0)),
+                     required_outward,
+                     coarse_start_recoveries, coarse_start_recovery_limit))
+                current = get_movable_location(nozzle)
+                move_direct_speed(nozzle, mm_loc(current.getX(), current.getY(),
+                    z_probe + lift, current.getRotation()),
+                    cfg.get("travel_speed", 1.0))
+                prepared = _prepare_hardware_start(cfg, nozzle, actuator, post,
+                    center, angle_deg, z_probe, start_x, start_y, ux, uy,
+                    start_dist, cfg.get("travel_speed", 1.0), logger,
+                    sample_label + " near-zero recovery",
+                    minimum_outward_mm=required_outward)
+                forced_outward = float(prepared["outward_recovery_mm"])
+                if forced_outward + 1.0e-9 < required_outward:
+                    raise NeedleCalibrationError(
+                        "%s: bounded recovery moved %.6f mm, less than the "
+                        "%.6f mm required to clear minimum coarse travel" %
+                        (sample_label, forced_outward, required_outward))
+                recovered = prepared["location"]
+                start_x = float(recovered.getX())
+                start_y = float(recovered.getY())
+                start_dist = float(prepared["start_radius_mm"])
+                travel_limit += forced_outward
+                log_msg(logger, "%s forced outward retry radius=%s "
+                    "effectiveTravel=%s" % (sample_label,
+                    fmt_float(start_dist), fmt_float(travel_limit)))
+                move_direct_speed(nozzle, mm_loc(start_x, start_y,
+                    z_probe + lift, rotation), cfg.get("travel_speed", 1.0))
+                move_direct_speed(nozzle, mm_loc(start_x, start_y, z_probe,
+                    rotation), cfg.get("travel_speed", 1.0))
+                continue
+            coarse_samples.append(validated)
+            break
         log_msg(logger, "%s validated travel=%s crossTrack=%s" %
             (sample_label, fmt_float(sample["travel_mm"]),
              fmt_float(sample["cross_track_error_mm"])))
@@ -1933,6 +2106,24 @@ def probe_post_edge_hardware(cfg, nozzle, actuator, center, angle_deg,
     log_msg(logger, "%s coarseAverage=%s fineStart=%s nominalFineBackoff=%s" %
         (label, fmt_xy(coarse_x, coarse_y), fmt_xy(fine_start_x, fine_start_y),
          fmt_float(fine_backoff)))
+    move_direct_speed(nozzle, mm_loc(fine_start_x, fine_start_y, z_probe,
+        rotation), cfg.get("travel_speed", 1.0))
+    fine_prepared = _prepare_hardware_start(cfg, nozzle, actuator, post, center,
+        angle_deg, z_probe, fine_start_x, fine_start_y, ux, uy,
+        effective_fine_radius, cfg.get("travel_speed", 1.0), logger,
+        label + " fine")
+    if fine_prepared["outward_recovery_mm"] > 0.0:
+        recovered = fine_prepared["location"]
+        fine_start_x = float(recovered.getX())
+        fine_start_y = float(recovered.getY())
+        effective_fine_radius = float(fine_prepared["start_radius_mm"])
+        fine_backoff += float(fine_prepared["outward_recovery_mm"])
+        fine_travel += float(fine_prepared["outward_recovery_mm"])
+        log_msg(logger,
+            "%s fine released-start recovery outward=%s startRadius=%s "
+            "effectiveFineTravel=%s" %
+            (label, fmt_float(fine_prepared["outward_recovery_mm"]),
+             fmt_float(effective_fine_radius), fmt_float(fine_travel)))
     fine_samples = None
     fine_candidates = []
     fine_rejected_samples = []
@@ -1940,12 +2131,32 @@ def probe_post_edge_hardware(cfg, nozzle, actuator, center, angle_deg,
     fine_attempt_limit = fine_count + fine_retry_count
     while fine_samples is None and fine_attempt < fine_attempt_limit:
         fine_attempt += 1
+        if fine_attempt > 1:
+            current = get_movable_location(nozzle)
+            if float(current.getZ()) < float(z_probe) + lift - 1.0e-9:
+                move_direct_speed(nozzle, mm_loc(current.getX(), current.getY(),
+                    z_probe + lift, current.getRotation()),
+                    cfg.get("travel_speed", 1.0))
         move_direct_speed(nozzle, mm_loc(fine_start_x, fine_start_y, z_probe, rotation),
             cfg.get("travel_speed", 1.0))
         sample_label = "%s fine candidate attempt %d/%d" % (
             label, fine_attempt, fine_attempt_limit)
+        fine_prepared = _prepare_hardware_start(cfg, nozzle, actuator, post,
+            center, angle_deg, z_probe, fine_start_x, fine_start_y, ux, uy,
+            effective_fine_radius, cfg.get("travel_speed", 1.0), logger,
+            sample_label)
+        if fine_prepared["outward_recovery_mm"] > 0.0:
+            recovered = fine_prepared["location"]
+            fine_start_x = float(recovered.getX())
+            fine_start_y = float(recovered.getY())
+            effective_fine_radius = float(fine_prepared["start_radius_mm"])
+            fine_backoff += float(fine_prepared["outward_recovery_mm"])
+            fine_travel += float(fine_prepared["outward_recovery_mm"])
+            log_msg(logger, "%s start recovery outward=%s effectiveFineTravel=%s" %
+                (sample_label, fmt_float(fine_prepared["outward_recovery_mm"]),
+                 fmt_float(fine_travel)))
         try:
-            reported = _run_xy_interrupt_once(nozzle, driver, post,
+            reported = _run_xy_interrupt_once(nozzle, driver, actuator, post,
                 -ux * fine_travel, -uy * fine_travel, fine_feed, logger,
                 sample_label)
             sample = _radial_contact(
@@ -1965,6 +2176,8 @@ def probe_post_edge_hardware(cfg, nozzle, actuator, center, angle_deg,
                     (label, fine_count,
                      [fmt_float(item.get("travel_mm")) for item in fine_candidates],
                      fmt_float(contact_tolerance)))
+        except NeedleCalibrationSafetyError:
+            raise
         except Throwable as error:
             if "abort" in str(error).lower():
                 raise
@@ -2203,6 +2416,340 @@ def pair_midpoint_debug(contacts, vision_center=None):
         "pair_count": count}
 
 
+def _normalized_angle_deg(angle):
+    value = float(angle) % 360.0
+    if value < 0.0:
+        value += 360.0
+    return value
+
+
+def _angle_difference_deg(first, second):
+    value = (_normalized_angle_deg(first) - _normalized_angle_deg(second)) % 360.0
+    return min(value, 360.0 - value)
+
+
+def _contact_geometry_diagnostics(contacts, vision_center, max_line_error):
+    """Validate the commanded radial lines and report their angular coverage."""
+    if len(contacts) < 3:
+        return {"ok": False, "message": "at least three valid contacts are required"}
+    angles = []
+    line_errors = []
+    radial_distances = []
+    for contact in contacts:
+        try:
+            angle = _normalized_angle_deg(contact["angle_deg"])
+            x = float(contact["x"])
+            y = float(contact["y"])
+        except Exception as error:
+            return {"ok": False, "message": "contact is missing numeric angle/x/y: %s" % error}
+        theta = math.radians(angle)
+        ux = math.cos(theta)
+        uy = math.sin(theta)
+        dx = x - float(vision_center["x"])
+        dy = y - float(vision_center["y"])
+        radial = dx * ux + dy * uy
+        cross_track = abs(-uy * dx + ux * dy)
+        angles.append(angle)
+        radial_distances.append(radial)
+        line_errors.append(cross_track)
+    unique_angles = []
+    for angle in sorted(angles):
+        duplicate = False
+        for previous in unique_angles:
+            if _angle_difference_deg(angle, previous) <= 1.0e-6:
+                duplicate = True
+                break
+        if not duplicate:
+            unique_angles.append(angle)
+    if len(unique_angles) < 3:
+        return {"ok": False, "message": "fewer than three independent contact angles",
+            "angles_deg": unique_angles, "line_errors_mm": line_errors}
+    gaps = []
+    for index in range(len(unique_angles)):
+        current = unique_angles[index]
+        following = unique_angles[(index + 1) % len(unique_angles)]
+        gap = following - current
+        if index == len(unique_angles) - 1:
+            gap += 360.0
+        gaps.append(gap)
+    max_gap = max(gaps)
+    coverage = 360.0 - max_gap
+    max_line = max(line_errors)
+    return {"ok": True, "angles_deg": unique_angles,
+        "angular_coverage_deg": coverage, "max_angular_gap_deg": max_gap,
+        "line_errors_mm": line_errors, "max_line_error_mm": max_line,
+        "radial_distances_mm": radial_distances}
+
+
+def _validate_angle_schedule(angles, post_cfg):
+    """Reject an unobservable configured scan before any machine motion."""
+    normalized = sorted([_normalized_angle_deg(angle) for angle in angles])
+    unique = []
+    for angle in normalized:
+        if not unique or _angle_difference_deg(angle, unique[-1]) > 1.0e-6:
+            unique.append(angle)
+    if len(unique) < 3:
+        raise NeedleCalibrationError(
+            "post_xy angle schedule has fewer than three unique directions")
+    gaps = []
+    for index in range(len(unique)):
+        gap = unique[(index + 1) % len(unique)] - unique[index]
+        if index == len(unique) - 1:
+            gap += 360.0
+        gaps.append(gap)
+    coverage = 360.0 - max(gaps)
+    min_coverage = abs(float(post_cfg.get("min_angular_coverage_deg", 180.0)))
+    max_gap = abs(float(post_cfg.get("max_angular_gap_deg", 180.0)))
+    if coverage < min_coverage:
+        raise NeedleCalibrationError(
+            "post_xy angle schedule covers only %.6f degrees; need %.6f" %
+            (coverage, min_coverage))
+    if max(gaps) > max_gap:
+        raise NeedleCalibrationError(
+            "post_xy angle schedule has %.6f degree gap; maximum allowed %.6f" %
+            (max(gaps), max_gap))
+    return {"angles_deg": unique, "angular_coverage_deg": coverage,
+        "max_angular_gap_deg": max(gaps)}
+
+
+def _symmetric_eigenvalues_3x3(matrix):
+    """Return eigenvalues of a symmetric 3x3 matrix without external modules."""
+    a = [[float(matrix[row][col]) for col in range(3)] for row in range(3)]
+    for unused in range(50):
+        p = 0
+        q = 1
+        largest = abs(a[0][1])
+        for first, second in [(0, 2), (1, 2)]:
+            if abs(a[first][second]) > largest:
+                p = first
+                q = second
+                largest = abs(a[first][second])
+        if largest < 1.0e-12:
+            break
+        angle = 0.5 * math.atan2(2.0 * a[p][q], a[q][q] - a[p][p])
+        cosine = math.cos(angle)
+        sine = math.sin(angle)
+        app = (cosine * cosine * a[p][p] -
+            2.0 * sine * cosine * a[p][q] + sine * sine * a[q][q])
+        aqq = (sine * sine * a[p][p] +
+            2.0 * sine * cosine * a[p][q] + cosine * cosine * a[q][q])
+        for index in range(3):
+            if index == p or index == q:
+                continue
+            aip = a[index][p]
+            aiq = a[index][q]
+            a[index][p] = cosine * aip - sine * aiq
+            a[p][index] = a[index][p]
+            a[index][q] = sine * aip + cosine * aiq
+            a[q][index] = a[index][q]
+        a[p][p] = app
+        a[q][q] = aqq
+        a[p][q] = 0.0
+        a[q][p] = 0.0
+    return sorted([a[0][0], a[1][1], a[2][2]])
+
+
+def _design_condition_number(rows):
+    """Condition estimate for a small least-squares design matrix."""
+    if not rows:
+        return float("inf")
+    columns = len(rows[0])
+    gram = [[0.0 for unused in range(columns)] for unused in range(columns)]
+    for row in rows:
+        for first in range(columns):
+            for second in range(columns):
+                gram[first][second] += float(row[first]) * float(row[second])
+    scales = []
+    for index in range(columns):
+        scales.append(math.sqrt(max(0.0, gram[index][index])))
+    for index in range(columns):
+        if scales[index] <= 1.0e-12:
+            return float("inf")
+    normalized = [[0.0 for unused in range(columns)] for unused in range(columns)]
+    for first in range(columns):
+        for second in range(columns):
+            normalized[first][second] = gram[first][second] / (scales[first] * scales[second])
+    eigenvalues = _symmetric_eigenvalues_3x3(normalized)
+    if eigenvalues[0] <= 1.0e-12:
+        return float("inf")
+    return math.sqrt(max(eigenvalues[-1], 0.0) / eigenvalues[0])
+
+
+def _opposite_contact_pairs(contacts):
+    """Pair contacts on opposite commanded radial lines, independent of spacing."""
+    remaining = list(contacts)
+    pairs = []
+    while remaining:
+        first = remaining.pop(0)
+        first_angle = _normalized_angle_deg(first.get("angle_deg"))
+        match_index = None
+        for index, candidate in enumerate(remaining):
+            candidate_angle = _normalized_angle_deg(candidate.get("angle_deg"))
+            if abs(_angle_difference_deg(candidate_angle, first_angle) - 180.0) <= 1.0e-6:
+                match_index = index
+                break
+        if match_index is not None:
+            pairs.append((first, remaining.pop(match_index)))
+    return pairs
+
+
+def _opposite_pair_projection_estimate(contacts, vision_center, max_condition):
+    pairs = _opposite_contact_pairs(contacts)
+    if len(pairs) < 2:
+        return {"ok": False, "pair_count": len(pairs),
+            "message": "fewer than two independent opposite contact pairs"}
+    matrix = [[0.0, 0.0], [0.0, 0.0]]
+    vector = [0.0, 0.0]
+    observations = []
+    for first, second in pairs:
+        angle = _normalized_angle_deg(first.get("angle_deg"))
+        theta = math.radians(angle)
+        ux = math.cos(theta)
+        uy = math.sin(theta)
+        midpoint_x = (float(first["x"]) + float(second["x"])) / 2.0
+        midpoint_y = (float(first["y"]) + float(second["y"])) / 2.0
+        midpoint_x -= float(vision_center["x"])
+        midpoint_y -= float(vision_center["y"])
+        projection = ux * midpoint_x + uy * midpoint_y
+        matrix[0][0] += ux * ux
+        matrix[0][1] += ux * uy
+        matrix[1][0] += ux * uy
+        matrix[1][1] += uy * uy
+        vector[0] += ux * projection
+        vector[1] += uy * projection
+        observations.append({"angle_deg": angle, "unit": {"x": ux, "y": uy},
+            "projection_mm": projection,
+            "midpoint": {"x": midpoint_x + float(vision_center["x"]),
+                "y": midpoint_y + float(vision_center["y"])}})
+    trace = matrix[0][0] + matrix[1][1]
+    determinant = matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]
+    discriminant = max(0.0, trace * trace - 4.0 * determinant)
+    smallest = (trace - math.sqrt(discriminant)) / 2.0
+    largest = (trace + math.sqrt(discriminant)) / 2.0
+    condition = float("inf") if smallest <= 1.0e-12 else math.sqrt(largest / smallest)
+    if condition > float(max_condition):
+        return {"ok": False, "pair_count": len(pairs),
+            "condition_number": condition,
+            "observations": observations,
+            "message": "opposite-pair estimator condition %.6f exceeds %.6f" %
+                (condition, float(max_condition))}
+    determinant = max(determinant, 1.0e-12)
+    dx = (vector[0] * matrix[1][1] - vector[1] * matrix[0][1]) / determinant
+    dy = (matrix[0][0] * vector[1] - matrix[1][0] * vector[0]) / determinant
+    residuals = []
+    for observation in observations:
+        residuals.append(observation["projection_mm"] -
+            (observation["unit"]["x"] * dx + observation["unit"]["y"] * dy))
+    return {"ok": True, "center": {"x": float(vision_center["x"]) + dx,
+            "y": float(vision_center["y"]) + dy},
+        "displacement": {"x": dx, "y": dy}, "pair_count": len(pairs),
+        "condition_number": condition, "residuals_mm": residuals,
+        "max_residual_mm": max([abs(item) for item in residuals]),
+        "observations": observations}
+
+
+def estimate_xy_contact_center(contacts, vision_center, post_cfg, circle_fit):
+    """Recover the full needle displacement and validate its geometry.
+
+    A midpoint of an opposite radial pair is not the circle center. Its
+    projection onto that radial line is only u dot d, where d is the full
+    needle-center displacement. Solving those scalar projections recovers d
+    without assuming a needle radius. A circle fit is retained as an
+    independent diagnostic and is the guarded fallback when no two opposite
+    pairs survive.
+    """
+    max_line_error = abs(float(post_cfg.get("max_contact_line_error_mm", 0.20)))
+    geometry = _contact_geometry_diagnostics(contacts, vision_center, max_line_error)
+    diagnostics = {"geometry": geometry}
+    if not geometry.get("ok", False):
+        return {"ok": False, "message": geometry.get("message"),
+            "diagnostics": diagnostics}
+    min_coverage = abs(float(post_cfg.get("min_angular_coverage_deg", 180.0)))
+    max_gap = abs(float(post_cfg.get("max_angular_gap_deg", 180.0)))
+    if geometry["angular_coverage_deg"] < min_coverage:
+        return {"ok": False,
+            "message": "angular coverage %.6f deg is below %.6f deg" %
+                (geometry["angular_coverage_deg"], min_coverage),
+            "diagnostics": diagnostics}
+    if geometry["max_angular_gap_deg"] > max_gap:
+        return {"ok": False,
+            "message": "largest angular gap %.6f deg exceeds %.6f deg" %
+                (geometry["max_angular_gap_deg"], max_gap),
+            "diagnostics": diagnostics}
+    if geometry["max_line_error_mm"] > max_line_error:
+        return {"ok": False,
+            "message": "contact line error %.6f exceeds %.6f mm" %
+                (geometry["max_line_error_mm"], max_line_error),
+            "diagnostics": diagnostics}
+
+    max_condition = abs(float(post_cfg.get("max_geometry_condition", 10.0)))
+    pair = _opposite_pair_projection_estimate(contacts, vision_center,
+        max_condition)
+    diagnostics["opposite_pair_estimator"] = pair
+    if circle_fit is not None:
+        diagnostics["circle_fit"] = circle_fit
+    max_pair_residual = abs(float(post_cfg.get("max_pair_projection_error_mm",
+        post_cfg.get("max_center_disagreement_mm", 0.20))))
+    if pair.get("ok", False) and pair.get("max_residual_mm", 0.0) > max_pair_residual:
+        pair["ok"] = False
+        pair["message"] = "opposite-pair projection residual %.6f exceeds %.6f mm" % (
+            pair["max_residual_mm"], max_pair_residual)
+        return {"ok": False, "message": pair["message"],
+            "diagnostics": diagnostics}
+    if not pair.get("ok", False) and pair.get("pair_count", 0) >= 2:
+        # Two or more opposite pairs are an independent observation of the
+        # displacement. If that estimator is ill-conditioned, do not hide the
+        # inconsistency behind a circle-only fallback.
+        return {"ok": False, "message": pair.get("message",
+                "opposite-pair estimator rejected the contact geometry"),
+            "diagnostics": diagnostics}
+
+    if circle_fit is None:
+        return {"ok": False, "message": "circle fit unavailable for XY estimator",
+            "diagnostics": diagnostics}
+    max_fit_rms = abs(float(post_cfg.get("max_fit_rms_mm", 0.15)))
+    max_fit_error = abs(float(post_cfg.get("max_fit_error_mm", 0.30)))
+    if float(circle_fit.get("rms_error_mm", float("inf"))) > max_fit_rms:
+        return {"ok": False,
+            "message": "circle fit RMS %.6f exceeds %.6f mm" %
+                (float(circle_fit.get("rms_error_mm")), max_fit_rms),
+            "diagnostics": diagnostics}
+    if float(circle_fit.get("max_error_mm", float("inf"))) > max_fit_error:
+        return {"ok": False,
+            "message": "circle fit maximum error %.6f exceeds %.6f mm" %
+                (float(circle_fit.get("max_error_mm")), max_fit_error),
+            "diagnostics": diagnostics}
+    if float(circle_fit.get("condition_number", float("inf"))) > max_condition:
+        return {"ok": False,
+            "message": "circle fit condition %.6f exceeds %.6f" %
+                (float(circle_fit.get("condition_number")), max_condition),
+            "diagnostics": diagnostics}
+
+    source = "circle_fit_fallback"
+    center = circle_fit.get("center")
+    if pair.get("ok", False):
+        pair_center = pair["center"]
+        disagreement = math.sqrt(
+            math.pow(float(pair_center["x"]) - float(center["x"]), 2.0) +
+            math.pow(float(pair_center["y"]) - float(center["y"]), 2.0))
+        pair["circle_center_disagreement_mm"] = disagreement
+        if disagreement > abs(float(post_cfg.get("max_center_disagreement_mm", 0.20))):
+            return {"ok": False,
+                "message": "XY estimators disagree by %.6f mm" % disagreement,
+                "diagnostics": diagnostics}
+        center = pair_center
+        source = "opposite_pair_projection_ls"
+    else:
+        if pair.get("pair_count", 0) > 0:
+            diagnostics["pair_fallback_reason"] = pair.get("message",
+                "opposite-pair estimator unavailable")
+    dx = float(center["x"]) - float(vision_center["x"])
+    dy = float(center["y"]) - float(vision_center["y"])
+    return {"ok": True, "center": {"x": float(center["x"]),
+            "y": float(center["y"])}, "displacement": {"x": dx, "y": dy},
+        "source": source, "diagnostics": diagnostics}
+
+
 def _hardware_xy_start_violation(nozzle, center, angle, radius, z_probe):
     """Return a soft-limit violation for a radial start, or None."""
     rotation = get_movable_location(nozzle).getRotation()
@@ -2216,27 +2763,62 @@ def _hardware_xy_start_violation(nozzle, center, angle, radius, z_probe):
         raise NeedleCalibrationError(
             "Cannot transform hardware start for angle %s: %s" %
             (str(angle), str(e)))
-    for axis in java_list_to_py(raw.getAxes()):
+
+    def read_xy_api(description, callback):
         try:
-            axis_type = axis.getType()
-            if axis_type not in [Axis.Type.X, Axis.Type.Y]:
-                continue
-            coordinate = float(raw.getCoordinate(axis))
-            if axis.isSoftLimitLowEnabled():
-                low = float(axis.getSoftLimitLow().convertToUnits(
-                    AxesLocation.getUnits()).getValue())
-                if coordinate < low - 1.0e-6:
-                    return "%s=%s below soft limit %s" % (
-                        str(axis.getName()), fmt_float(coordinate), fmt_float(low))
-            if axis.isSoftLimitHighEnabled():
-                high = float(axis.getSoftLimitHigh().convertToUnits(
-                    AxesLocation.getUnits()).getValue())
-                if coordinate > high + 1.0e-6:
-                    return "%s=%s above soft limit %s" % (
-                        str(axis.getName()), fmt_float(coordinate), fmt_float(high))
-        except:
-            # Non-controller/virtual axes do not expose soft-limit APIs.
-            pass
+            return callback()
+        except Throwable as error:
+            raise NeedleCalibrationSafetyError(
+                "%s for angle %s: %s" % (description, str(angle), str(error)))
+        except Exception as error:
+            raise NeedleCalibrationSafetyError(
+                "%s for angle %s: %s" % (description, str(angle), str(error)))
+
+    for axis in java_list_to_py(raw.getAxes()):
+        axis_type = read_xy_api(
+            "Cannot determine axis type while checking hardware start",
+            axis.getType)
+        if axis_type not in [Axis.Type.X, Axis.Type.Y]:
+            continue
+        low_enabled = bool(read_xy_api(
+            "Cannot read XY soft-limit enable state",
+            axis.isSoftLimitLowEnabled))
+        high_enabled = bool(read_xy_api(
+            "Cannot read XY soft-limit enable state",
+            axis.isSoftLimitHighEnabled))
+        if not low_enabled and not high_enabled:
+            continue
+        coordinate = read_xy_api(
+            "Cannot read enabled XY soft-limit coordinate",
+            lambda: float(raw.getCoordinate(axis)))
+        if math.isnan(coordinate) or math.isinf(coordinate):
+            raise NeedleCalibrationSafetyError(
+                "Enabled XY soft-limit coordinate is not finite for angle %s" %
+                str(angle))
+        if low_enabled:
+            low = read_xy_api(
+                "Cannot read enabled XY low soft limit",
+                lambda: float(axis.getSoftLimitLow().convertToUnits(
+                    AxesLocation.getUnits()).getValue()))
+            if math.isnan(low) or math.isinf(low):
+                raise NeedleCalibrationSafetyError(
+                    "Enabled XY low soft limit is not finite for angle %s" %
+                    str(angle))
+            if coordinate < low - 1.0e-6:
+                return "%s=%s below soft limit %s" % (
+                    str(axis.getName()), fmt_float(coordinate), fmt_float(low))
+        if high_enabled:
+            high = read_xy_api(
+                "Cannot read enabled XY high soft limit",
+                lambda: float(axis.getSoftLimitHigh().convertToUnits(
+                    AxesLocation.getUnits()).getValue()))
+            if math.isnan(high) or math.isinf(high):
+                raise NeedleCalibrationSafetyError(
+                    "Enabled XY high soft limit is not finite for angle %s" %
+                    str(angle))
+            if coordinate > high + 1.0e-6:
+                return "%s=%s above soft limit %s" % (
+                    str(axis.getName()), fmt_float(coordinate), fmt_float(high))
     return None
 
 
@@ -2272,6 +2854,30 @@ def _bounded_hardware_start_radius(nozzle, center, angle, requested_radius,
     return effective, violation
 
 
+def _prepare_hardware_start(cfg, nozzle, actuator, post, center, angle, z_probe,
+        start_x, start_y, ux, uy, start_radius, speed, logger, label,
+        minimum_outward_mm=0.0):
+    """Require a released sensor before issuing a hardware G38 move."""
+    max_outward = abs(float(post.get("outside_recover_max_mm", 3.0)))
+    if max_outward <= 0.0:
+        raise NeedleCalibrationError(
+            "%s: outside_recover_max_mm must be > 0 for hardware start safety" % label)
+    max_safe_radius, limit_reason = _bounded_hardware_start_radius(nozzle,
+        center, angle, float(start_radius) + max_outward, z_probe)
+    recovered, outward = recover_outside_start_if_touching(nozzle, actuator,
+        post, start_x, start_y, ux, uy, z_probe, speed, logger, label,
+        start_radius_mm=start_radius, max_start_radius_mm=max_safe_radius,
+        minimum_outward_mm=minimum_outward_mm)
+    if outward <= 0.0:
+        return {"location": recovered, "start_radius_mm": float(start_radius),
+            "outward_recovery_mm": 0.0, "max_safe_radius_mm": max_safe_radius,
+            "limit_reason": limit_reason}
+    return {"location": recovered,
+        "start_radius_mm": float(start_radius) + float(outward),
+        "outward_recovery_mm": float(outward),
+        "max_safe_radius_mm": max_safe_radius, "limit_reason": limit_reason}
+
+
 def probe_8_point_post_xy(cfg, nozzle, actuator, vision_center, configured_radius,
         z_probe, logger=None):
     post = cfg.get("post_xy", {})
@@ -2280,6 +2886,7 @@ def probe_8_point_post_xy(cfg, nozzle, actuator, vision_center, configured_radiu
     if len(angles) != 8:
         raise NeedleCalibrationError("Post XY requires exactly 8 angles; got %d" %
             len(angles))
+    angle_schedule = _validate_angle_schedule(angles, post)
     acquisition = str(post.get("acquisition_method", "polling") or
         "polling").strip().lower()
     effective_start_radii = {}
@@ -2358,8 +2965,9 @@ def probe_8_point_post_xy(cfg, nozzle, actuator, vision_center, configured_radiu
         min_valid = 3
     fit = None
     if len(valid_contacts) >= min_valid:
-        fit = circle_fit_contacts(valid_contacts)
+        fit = circle_fit_contacts(valid_contacts, vision_center)
     return {"angles": angles, "all_edges": all_edges,
+        "angle_schedule": angle_schedule,
         "contacts": valid_contacts, "invalid_edges": invalid_edges,
         "valid_contact_count": len(valid_contacts),
         "invalid_contact_count": len(invalid_edges),
@@ -2407,23 +3015,31 @@ def solve_3x3(matrix, vector):
     return [a[0][3], a[1][3], a[2][3]]
 
 
-def circle_fit_contacts(contacts):
+def circle_fit_contacts(contacts, reference_center=None):
     if len(contacts) < 3:
         raise NeedleCalibrationError("Circle fit requires at least three contacts")
+    if reference_center is None:
+        reference_x = sum([float(p["x"]) for p in contacts]) / float(len(contacts))
+        reference_y = sum([float(p["y"]) for p in contacts]) / float(len(contacts))
+    else:
+        reference_x = float(reference_center["x"])
+        reference_y = float(reference_center["y"])
     ata = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
     atb = [0.0, 0.0, 0.0]
+    design_rows = []
     for p in contacts:
-        x = float(p["x"])
-        y = float(p["y"])
+        x = float(p["x"]) - reference_x
+        y = float(p["y"]) - reference_y
         row = [x, y, 1.0]
         b = -(x * x + y * y)
+        design_rows.append(row)
         for r in range(3):
             atb[r] += row[r] * b
             for c in range(3):
                 ata[r][c] += row[r] * row[c]
     a, b, c = solve_3x3(ata, atb)
-    cx = -a / 2.0
-    cy = -b / 2.0
+    cx = reference_x - a / 2.0
+    cy = reference_y - b / 2.0
     rr = (a * a + b * b) / 4.0 - c
     if rr <= 0.0:
         raise NeedleCalibrationError("Circle fit produced non-positive radius")
@@ -2443,7 +3059,9 @@ def circle_fit_contacts(contacts):
         "rms_error_mm": math.sqrt(sum_sq / float(len(contacts))),
         "max_error_mm": max_err,
         "residuals_mm": residuals,
-        "point_count": len(contacts)
+        "point_count": len(contacts),
+        "reference_center": {"x": reference_x, "y": reference_y},
+        "condition_number": _design_condition_number(design_rows)
     }
 
 
@@ -2739,37 +3357,25 @@ def run_post_xy_measure(cfg, nozzle=None, machine_obj=None, logger=None):
         fitted_center = fit["center"]
         fitted_radius = float(fit["radius_mm"])
         fitted_diameter = 2.0 * fitted_radius
-
-        # Known precision ball/post size comes from config. Do not use the
-        # vision-derived detected diameter for calibration. Vision is only
-        # trusted for the ball center.
         known_ball_radius = configured_radius
         known_ball_diameter = configured_diameter
-
-        # The fitted contact circle radius is ball radius + effective needle
-        # contact radius. This is diagnostic only; it is not used to calculate
-        # the XY proposal.
         estimated_needle_tip_radius = fitted_radius - known_ball_radius
         estimated_needle_tip_diameter = 2.0 * estimated_needle_tip_radius
+        fit_quality_warnings = []
+        max_fit_rms = float(post.get("max_fit_rms_mm", 0.15))
+        max_fit_error = float(post.get("max_fit_error_mm", 0.30))
+        if float(fit.get("rms_error_mm", 0.0)) > max_fit_rms:
+            fit_quality_warnings.append(
+                "fit RMS %.6f exceeds %.6f" %
+                (float(fit.get("rms_error_mm")), max_fit_rms))
+        if float(fit.get("max_error_mm", 0.0)) > max_fit_error:
+            fit_quality_warnings.append(
+                "fit max error %.6f exceeds %.6f" %
+                (float(fit.get("max_error_mm")), max_fit_error))
 
-        # For XY offset, use opposite-pair midpoint average. That directly
-        # estimates the ball center from the needle contacts and is independent
-        # of ball radius / needle radius.
         pair_debug = pair_midpoint_debug(result.get("contacts", []), vision_center)
-        xy_center = pair_debug.get("center")
-        xy_center_source = "opposite_pair_midpoint_average"
-        if xy_center is None:
-            # Fallback should rarely happen; min_valid_contacts_for_fit may allow
-            # enough points for a circle but no complete opposite pair.
-            xy_center = fitted_center
-            xy_center_source = "circle_fit_center_fallback"
-
-        dx = float(xy_center["x"]) - float(vision_center["x"])
-        dy = float(xy_center["y"]) - float(vision_center["y"])
-        circle_dx = float(fitted_center["x"]) - float(vision_center["x"])
-        circle_dy = float(fitted_center["y"]) - float(vision_center["y"])
-
-        proposal = make_xy_proposal(cfg, old, dx, dy)
+        estimator = estimate_xy_contact_center(result.get("contacts", []),
+            vision_center, post, fit)
         details = dict(base_details)
         details.update({"fit": fit,
             "fitted_contact_circle_radius_mm": fitted_radius,
@@ -2783,10 +3389,44 @@ def run_post_xy_measure(cfg, nozzle=None, machine_obj=None, logger=None):
             "estimated_effective_probe_radius_mm": estimated_needle_tip_radius,
             "estimated_effective_probe_diameter_mm": estimated_needle_tip_diameter,
             "pair_midpoint_debug": pair_debug,
-            "xy_center_source": xy_center_source,
+            "xy_estimator": estimator,
+            "fit_quality_warnings": fit_quality_warnings,
+            "circle_fit_center_delta": {
+                "x": float(fitted_center["x"]) - float(vision_center["x"]),
+                "y": float(fitted_center["y"]) - float(vision_center["y"])}})
+
+        radius_tolerance = abs(float(post.get(
+            "min_fitted_radius_tolerance_mm", 0.05)))
+        if fitted_radius < known_ball_radius - radius_tolerance:
+            details["radius_consistency_error_mm"] = (
+                known_ball_radius - fitted_radius)
+            current = loc_to_dict(nozzle.getHeadOffsets().convertToUnits(
+                LengthUnit.Millimeters))
+            return {"ok": False, "stage": stage,
+                "message": "fitted contact radius %.6f mm is below known post "
+                    "radius %.6f mm by more than %.6f mm tolerance" %
+                    (fitted_radius, known_ball_radius, radius_tolerance),
+                "old_offsets": old_offsets, "current_offsets": current,
+                "proposal": None, "details": details}
+
+        if not estimator.get("ok", False):
+            details["xy_estimator_error"] = estimator.get("message",
+                "XY estimator rejected the contact geometry")
+            current = loc_to_dict(nozzle.getHeadOffsets().convertToUnits(
+                LengthUnit.Millimeters))
+            return {"ok": False, "stage": stage,
+                "message": details["xy_estimator_error"],
+                "old_offsets": old_offsets, "current_offsets": current,
+                "proposal": None, "details": details}
+
+        xy_center = estimator["center"]
+        xy_center_source = estimator.get("source", "xy_estimator")
+        dx = float(estimator["displacement"]["x"])
+        dy = float(estimator["displacement"]["y"])
+        details.update({"xy_center_source": xy_center_source,
             "xy_contact_center": xy_center,
-            "center_delta": {"x": dx, "y": dy},
-            "circle_fit_center_delta": {"x": circle_dx, "y": circle_dy}})
+            "center_delta": {"x": dx, "y": dy}})
+        proposal = make_xy_proposal(cfg, old, dx, dy)
 
         for row in pair_debug.get("pairs", []):
             if row.get("valid", False):
@@ -2808,8 +3448,19 @@ def run_post_xy_measure(cfg, nozzle=None, machine_obj=None, logger=None):
         log_msg(logger, "POST XY ESTIMATED NEEDLE TIP diameter=%s radius=%s" %
             (fmt_float(estimated_needle_tip_diameter),
              fmt_float(estimated_needle_tip_radius)))
+        geometry_diagnostics = estimator.get("diagnostics", {}).get("geometry", {})
+        pair_diagnostics = estimator.get("diagnostics", {}).get(
+            "opposite_pair_estimator", {})
+        log_msg(logger, "POST XY GEOMETRY coverage=%s maxGap=%s maxLineError=%s "
+            "circleCondition=%s pairCondition=%s" %
+            (fmt_float(geometry_diagnostics.get("angular_coverage_deg", 0.0)),
+             fmt_float(geometry_diagnostics.get("max_angular_gap_deg", 0.0)),
+             fmt_float(geometry_diagnostics.get("max_line_error_mm", 0.0)),
+             fmt_float(fit.get("condition_number", 0.0)),
+             fmt_float(pair_diagnostics.get("condition_number", 0.0))))
         log_msg(logger, "POST XY CIRCLE FIT CENTER DELTA from vision=%s" %
-            fmt_xy(circle_dx, circle_dy))
+            fmt_xy(fitted_center["x"] - vision_center["x"],
+                fitted_center["y"] - vision_center["y"]))
         log_msg(logger, "POST XY CONTACT CENTER source=%s center=%s" %
             (xy_center_source, fmt_xy(xy_center["x"], xy_center["y"])))
         log_msg(logger, "POST XY NEEDLE-TO-CAMERA DELTA from vision=%s" %
@@ -2818,38 +3469,7 @@ def run_post_xy_measure(cfg, nozzle=None, machine_obj=None, logger=None):
             (fmt_xy(proposal["offset_delta"]["x"], proposal["offset_delta"]["y"]),
              fmt_loc(proposal["proposed_offsets"])))
 
-        fit_rms = float(fit["rms_error_mm"])
-        fit_max = float(fit["max_error_mm"])
-        max_fit_rms = float(post.get("max_fit_rms_mm", 0.15))
-        max_fit_error = float(post.get("max_fit_error_mm", 0.30))
         max_center = float(post.get("max_center_error_mm", 2.0))
-        fit_quality_warnings = []
-        if fit_rms > max_fit_rms:
-            fit_quality_warnings.append(
-                "fit RMS %.6f exceeds %.6f" % (fit_rms, max_fit_rms))
-        if fit_max > max_fit_error:
-            fit_quality_warnings.append(
-                "fit max error %.6f exceeds %.6f" % (fit_max, max_fit_error))
-        details["fit_quality_warnings"] = fit_quality_warnings
-
-        # Circle residuals only describe how circular the eight needle-contact
-        # points are. The normal XY result comes from opposite-pair midpoints,
-        # which intentionally cancels contact radius and remains valid when a
-        # different needle diameter, bevel, or small directional compliance
-        # makes the contact locus non-circular. Do not reject that independent
-        # estimator using circle-fit residuals. If no opposite pair exists and
-        # we actually fall back to the fitted circle center, however, the fit
-        # limits are still required safety checks.
-        if fit_quality_warnings:
-            if xy_center_source == "circle_fit_center_fallback":
-                return {"ok": False, "stage": stage,
-                    "message": fit_quality_warnings[0],
-                    "old_offsets": old_offsets,
-                    "current_offsets": loc_to_dict(nozzle.getHeadOffsets().convertToUnits(LengthUnit.Millimeters)),
-                    "proposal": None, "details": details}
-            for warning in fit_quality_warnings:
-                log_msg(logger, "POST XY WARNING: %s; diagnostic only because XY uses opposite-pair midpoints" %
-                    warning)
         if abs(dx) > max_center or abs(dy) > max_center:
             return {"ok": False, "stage": stage,
                 "message": "center delta X/Y %.6f/%.6f exceeds %.6f" %
@@ -3040,8 +3660,12 @@ def apply_z(cfg, nozzle, proposal, logger=None):
     target["z"] = float(proposed["z"])
     check_apply_delta(cfg, current, target, ["z"])
     log_msg(logger, "Apply Z offset old=%s new=%s" % (current, target))
+    # Applying offsets is immediately followed by the caller's explicit
+    # Configuration.save(). Do not add a motion-planner wait here: if that
+    # wait fails after setHeadOffsets(), the operator workflow treats the
+    # whole apply as failed and restores the old offsets before saving.
+    # The full-measurement path already synchronizes before starting XY.
     new_offsets = set_offsets_and_verify(nozzle, target, logger)
-    synchronize_coordinate_system(nozzle, None, logger)
     return {"ok": True, "stage": "apply_z", "old_offsets": current,
         "new_offsets": new_offsets}
 
@@ -3054,8 +3678,10 @@ def apply_xy(cfg, nozzle, proposal, logger=None):
     target["y"] = float(proposed["y"])
     check_apply_delta(cfg, current, target, ["x", "y"])
     log_msg(logger, "Apply XY offset old=%s new=%s" % (current, target))
+    # Keep Apply XY a direct set/verify operation. Persistence is handled by
+    # the caller, and a planner wait must not turn a successful set into a
+    # rollback before that save occurs.
     new_offsets = set_offsets_and_verify(nozzle, target, logger)
-    synchronize_coordinate_system(nozzle, None, logger)
     return {"ok": True, "stage": "apply_xy", "old_offsets": current,
         "new_offsets": new_offsets}
 
@@ -3073,8 +3699,9 @@ def apply_xyz(cfg, nozzle, proposal, logger=None):
     limit_base = state.get("original_offsets") if isinstance(state, dict) else None
     check_apply_delta(cfg, limit_base or current, target, ["x", "y", "z"])
     log_msg(logger, "Apply XYZ offset old=%s new=%s" % (current, target))
+    # Keep Apply XY a direct set/verify operation; the caller saves after the
+    # function returns successfully.
     new_offsets = set_offsets_and_verify(nozzle, target, logger)
-    synchronize_coordinate_system(nozzle, None, logger)
     accepted_state = None
     if isinstance(state, dict) and state:
         accepted_state = {"status": "accepted",
